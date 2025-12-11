@@ -1,14 +1,21 @@
 extends Node2D
 
-# Configurações Isométricas
+# Configurações Isométricas (Estilo Hades - Isométrica 45 graus)
 const TILE_WIDTH = 64
-const TILE_HEIGHT = 32
+const TILE_HEIGHT = 32  # Proporção isométrica clássica
+const TILE_WIDTH_HALF = TILE_WIDTH / 2.0
+const TILE_HEIGHT_HALF = TILE_HEIGHT / 2.0
 const PLAYER_SIZE = 0.5 # Tamanho do player na grade (0.5 = metade de um bloco)
+const PLAYER_HALF_SIZE = PLAYER_SIZE / 2.0
+const PLAYER_HEIGHT = 40.0
+const PLAYER_WIDTH = 20.0
+const PLAYER_HEAD_RADIUS = 8.0
 
 # Player
 var player_grid_pos: Vector2 = Vector2(0, 0)
 var speed: float = 200.0
 var is_moving: bool = true
+var last_camera_pos: Vector2 = Vector2.ZERO
 
 # Câmera e Transição
 var camera: Camera2D
@@ -18,25 +25,18 @@ var current_map_index: int = 0
 # Dados dos Mapas
 var maps = [
 	{
-		"name": "Entrada da Masmorra",
-		"size": Vector2(10, 10),
-		"spawn": Vector2(1, 1),
-		"exit": Vector2(8, 8),
-		"walls": [
-			Vector2(3, 3), Vector2(3, 4), Vector2(3, 5),
-			Vector2(6, 2), Vector2(6, 3), Vector2(7, 3)
-		]
+		"name": "Ilha da Masmorra",
+		"size": Vector2(20, 20),
+		"spawn": Vector2(10, 10),
+		"exit": Vector2(15, 15),
+		"walls": _generate_island_walls(Vector2(10, 10), 7.0, Vector2(20, 20))
 	},
 	{
-		"name": "Salão Principal",
-		"size": Vector2(15, 15),
-		"spawn": Vector2(1, 1),
-		"exit": Vector2(13, 13),
-		"walls": [
-			Vector2(5, 5), Vector2(5, 6), Vector2(5, 7), Vector2(5, 8),
-			Vector2(8, 5), Vector2(8, 6), Vector2(8, 7), Vector2(8, 8),
-			Vector2(2, 10), Vector2(3, 10), Vector2(4, 10)
-		]
+		"name": "Arquipélago",
+		"size": Vector2(25, 25),
+		"spawn": Vector2(12, 12),
+		"exit": Vector2(20, 20),
+		"walls": _generate_multi_island_walls(Vector2(25, 25))
 	}
 ]
 
@@ -67,12 +67,15 @@ func _load_map(index: int) -> void:
 func _process(delta: float) -> void:
 	if is_moving:
 		_handle_input(delta)
+		# Só redesenha se houve movimento
+		queue_redraw()
 	
-	queue_redraw()
-	
-	# Câmera segue o player
+	# Câmera segue o player (com threshold para evitar updates contínuos)
 	var screen_pos = cartesian_to_isometric(player_grid_pos)
-	camera.position = camera.position.lerp(screen_pos, 5.0 * delta)
+	var new_camera_pos = last_camera_pos.lerp(screen_pos, 5.0 * delta)
+	if last_camera_pos.distance_to(new_camera_pos) > 0.1:
+		camera.position = new_camera_pos
+		last_camera_pos = new_camera_pos
 
 func _handle_input(delta: float) -> void:
 	var input_dir = Vector2.ZERO
@@ -113,30 +116,27 @@ func _handle_input(delta: float) -> void:
 func _is_valid_position(pos: Vector2) -> bool:
 	var map = maps[current_map_index]
 	var size = map.size
-	var half_size = PLAYER_SIZE / 2.0
 	
 	# 1. Limites do Mapa (Bounding Box do Player)
-	if pos.x - half_size < 0 or pos.x + half_size >= size.x or \
-	   pos.y - half_size < 0 or pos.y + half_size >= size.y:
+	if pos.x - PLAYER_HALF_SIZE < 0 or pos.x + PLAYER_HALF_SIZE >= size.x or \
+	   pos.y - PLAYER_HALF_SIZE < 0 or pos.y + PLAYER_HALF_SIZE >= size.y:
 		return false
 	
-	# 2. Paredes (Colisão AABB)
-	var player_rect = Rect2(pos.x - half_size, pos.y - half_size, PLAYER_SIZE, PLAYER_SIZE)
+	# 2. Paredes (Colisão AABB) - Usa cache de walls
+	var player_rect = Rect2(pos.x - PLAYER_HALF_SIZE, pos.y - PLAYER_HALF_SIZE, PLAYER_SIZE, PLAYER_SIZE)
+	var walls = map.walls
 	
-	# Otimização: Checa apenas paredes vizinhas
-	var start_x = floor(pos.x - 1)
-	var end_x = ceil(pos.x + 1)
-	var start_y = floor(pos.y - 1)
-	var end_y = ceil(pos.y + 1)
+	# Otimização: Checa apenas paredes vizinhas (reduz de O(n) para O(1) amortizado)
+	var start_x = int(pos.x - 2)
+	var end_x = int(pos.x + 2)
+	var start_y = int(pos.y - 2)
+	var end_y = int(pos.y + 2)
 	
 	for x in range(start_x, end_x + 1):
 		for y in range(start_y, end_y + 1):
 			var wall_pos = Vector2(x, y)
-			if wall_pos in map.walls:
-				# Parede é um quadrado 1x1 centrado em (x, y)
-				# Rect vai de x-0.5 a x+0.5
+			if wall_pos in walls:
 				var wall_rect = Rect2(wall_pos.x - 0.5, wall_pos.y - 0.5, 1.0, 1.0)
-				
 				if player_rect.intersects(wall_rect):
 					return false
 		
@@ -210,58 +210,157 @@ func _draw() -> void:
 	for item in draw_list:
 		var screen_pos = cartesian_to_isometric(item.pos)
 		if item.type == "wall":
-			_draw_iso_cube(screen_pos, Color(0.5, 0.4, 0.3), 60) # Parede Marrom
+			_draw_iso_tile_filled(screen_pos, Color(0.5, 0.4, 0.3)) # Parede Marrom
 		elif item.type == "player":
-			_draw_iso_cube(screen_pos, Color.CYAN, 40) # Player Azul
+			_draw_player_sprite(screen_pos, Color.CYAN) # Player com altura
 
-# Converte coordenadas da Grade (Cartesiana) para Tela (Isométrica)
+# Converte coordenadas da Grade (Cartesiana) para Tela (Isométrica) - Inline otimizado
 func cartesian_to_isometric(cart: Vector2) -> Vector2:
-	var screen = Vector2()
-	screen.x = (cart.x - cart.y) * (TILE_WIDTH / 2.0)
-	screen.y = (cart.x + cart.y) * (TILE_HEIGHT / 2.0)
-	return screen
+	return Vector2((cart.x - cart.y) * TILE_WIDTH_HALF, (cart.x + cart.y) * TILE_HEIGHT_HALF)
 
-# Desenha um losango (tile plano)
+# Desenha um losango (tile plano) - Estilo Hades
 func _draw_iso_tile(pos: Vector2, color: Color) -> void:
 	var points = PackedVector2Array([
-		pos + Vector2(0, -TILE_HEIGHT / 2.0),
-		pos + Vector2(TILE_WIDTH / 2.0, 0),
-		pos + Vector2(0, TILE_HEIGHT / 2.0),
-		pos + Vector2(-TILE_WIDTH / 2.0, 0)
+		pos + Vector2(0, -TILE_HEIGHT_HALF),
+		pos + Vector2(TILE_WIDTH_HALF, 0),
+		pos + Vector2(0, TILE_HEIGHT_HALF),
+		pos + Vector2(-TILE_WIDTH_HALF, 0)
 	])
 	draw_polygon(points, PackedColorArray([color]))
 	draw_polyline(points, Color.BLACK, 1.0)
 
-# Desenha um cubo isométrico
-func _draw_iso_cube(pos: Vector2, color: Color, height: int) -> void:
-	var base_pos = pos + Vector2(0, 0) # Base no chão
-	
-	# Face Superior (Topo)
-	var top_points = PackedVector2Array([
-		base_pos + Vector2(0, -TILE_HEIGHT / 2.0 - height),
-		base_pos + Vector2(TILE_WIDTH / 2.0, -height),
-		base_pos + Vector2(0, TILE_HEIGHT / 2.0 - height),
-		base_pos + Vector2(-TILE_WIDTH / 2.0, -height)
+# Desenha um tile preenchido com cor escurecida - SEM polyline (mais rápido)
+func _draw_iso_tile_filled(pos: Vector2, color: Color) -> void:
+	var points = PackedVector2Array([
+		pos + Vector2(0, -TILE_HEIGHT_HALF),
+		pos + Vector2(TILE_WIDTH_HALF, 0),
+		pos + Vector2(0, TILE_HEIGHT_HALF),
+		pos + Vector2(-TILE_WIDTH_HALF, 0)
 	])
-	draw_polygon(top_points, PackedColorArray([color.lightened(0.2)]))
-	draw_polyline(top_points, Color.BLACK, 1.0)
+	draw_polygon(points, PackedColorArray([color.darkened(0.2)]))
+
+# Desenha o player - Otimizado (remove polylines desnecessárias)
+func _draw_player_sprite(pos: Vector2, color: Color) -> void:
+	# Cabeça (círculo no topo)
+	var head_pos = pos + Vector2(0, -(PLAYER_HEIGHT + PLAYER_HEAD_RADIUS))
+	draw_circle(head_pos, PLAYER_HEAD_RADIUS, color)
 	
-	# Face Direita
-	var right_points = PackedVector2Array([
-		base_pos + Vector2(0, TILE_HEIGHT / 2.0 - height),
-		base_pos + Vector2(TILE_WIDTH / 2.0, -height),
-		base_pos + Vector2(TILE_WIDTH / 2.0, 0),
-		base_pos + Vector2(0, TILE_HEIGHT / 2.0)
+	# Corpo (retângulo vertical)
+	var body_points = PackedVector2Array([
+		pos + Vector2(-PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),
+		pos + Vector2(PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),
+		pos + Vector2(PLAYER_WIDTH / 2.0, 0),
+		pos + Vector2(-PLAYER_WIDTH / 2.0, 0)
 	])
-	draw_polygon(right_points, PackedColorArray([color.darkened(0.2)]))
-	draw_polyline(right_points, Color.BLACK, 1.0)
+	draw_polygon(body_points, PackedColorArray([color.darkened(0.1)]))
 	
-	# Face Esquerda
-	var left_points = PackedVector2Array([
-		base_pos + Vector2(0, TILE_HEIGHT / 2.0 - height),
-		base_pos + Vector2(-TILE_WIDTH / 2.0, -height),
-		base_pos + Vector2(-TILE_WIDTH / 2.0, 0),
-		base_pos + Vector2(0, TILE_HEIGHT / 2.0)
+	# Sombra no chão (pequeno losango) - SEM polyline
+	var shadow_points = PackedVector2Array([
+		pos + Vector2(0, -3),
+		pos + Vector2(12, 0),
+		pos + Vector2(0, 3),
+		pos + Vector2(-12, 0)
 	])
-	draw_polygon(left_points, PackedColorArray([color.darkened(0.4)]))
-	draw_polyline(left_points, Color.BLACK, 1.0)
+	draw_polygon(shadow_points, PackedColorArray([Color(0, 0, 0, 0.3)]))
+
+# ============================================
+# FUNÇÕES PARA CRIAR/PERSONALIZAR MAPAS
+# ============================================
+
+# Gera paredes em formato de ilha (círculo irregular)
+func _generate_island_walls(center: Vector2, base_radius: float, map_size: Vector2) -> Array:
+	var walls = []
+	var noise = FastNoiseLite.new()
+	noise.seed = randi()
+	noise.frequency = 0.3
+	
+	# Cria o perímetro da ilha com ruído para forma natural
+	for x in range(int(map_size.x)):
+		for y in range(int(map_size.y)):
+			var pos = Vector2(x, y)
+			var distance = pos.distance_to(center)
+			
+			# Adiciona ruído ao raio para criar forma irregular
+			var noise_value = noise.get_noise_2d(x, y) * 1.5
+			var adjusted_radius = base_radius + noise_value
+			
+			# Coloca parede se está fora da ilha
+			if distance > adjusted_radius:
+				walls.append(pos)
+	
+	return walls
+
+# Gera múltiplas ilhas (arquipélago)
+func _generate_multi_island_walls(map_size: Vector2) -> Array:
+	var walls = []
+	var noise = FastNoiseLite.new()
+	noise.seed = randi()
+	noise.frequency = 0.25
+	
+	# Ilhas principais
+	var islands = [
+		{"center": Vector2(8, 8), "radius": 5.5},
+		{"center": Vector2(18, 8), "radius": 4.5},
+		{"center": Vector2(12, 16), "radius": 4.0}
+	]
+	
+	for x in range(int(map_size.x)):
+		for y in range(int(map_size.y)):
+			var pos = Vector2(x, y)
+			var on_island = false
+			
+			# Checa se está em alguma ilha
+			for island in islands:
+				var distance = pos.distance_to(island.center)
+				var noise_value = noise.get_noise_2d(x, y) * 1.2
+				var adjusted_radius = island.radius + noise_value
+				
+				if distance <= adjusted_radius:
+					on_island = true
+					break
+			
+			# Se não está em nenhuma ilha, é parede (água)
+			if not on_island:
+				walls.append(pos)
+	
+	return walls
+
+# Gera um tilemap padrão (chão completo com paredes marcadas)
+func _generate_tilemap(size: Vector2, wall_positions: Array) -> Dictionary:
+	var tilemap = {}
+	
+	for x in range(int(size.x)):
+		for y in range(int(size.y)):
+			var pos = Vector2(x, y)
+			var tile_type = "floor"
+			var tile_color = Color(0.3, 0.3, 0.3)
+			
+			# Se é parede, marca como tal
+			if pos in wall_positions:
+				tile_type = "wall"
+				tile_color = Color(0.5, 0.4, 0.3)
+			
+			tilemap[pos] = {
+				"type": tile_type,
+				"color": tile_color,
+				"collision": tile_type == "wall"
+			}
+	
+	return tilemap
+
+# Função helper para criar um retângulo de terreno
+func create_rect_terrain(top_left: Vector2, width: int, height: int, _tile_type: String = "floor") -> Array:
+	var tiles = []
+	for x in range(width):
+		for y in range(height):
+			tiles.append(top_left + Vector2(x, y))
+	return tiles
+
+# Função helper para criar um círculo de terreno
+func create_circle_terrain(center: Vector2, radius: float, _tile_type: String = "floor") -> Array:
+	var tiles = []
+	for x in range(int(center.x - radius), int(center.x + radius) + 1):
+		for y in range(int(center.y - radius), int(center.y + radius) + 1):
+			if Vector2(x, y).distance_to(center) <= radius:
+				tiles.append(Vector2(x, y))
+	return tiles
