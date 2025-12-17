@@ -68,6 +68,11 @@ var player_hp: int = 100
 var player_max_hp: int = 100
 var player_attack: int = 10
 
+var LoggerClass = preload("res://scripts/utils/logger.gd") # DJLogger
+var logger = null
+var last_selected_option_index: int = -1
+var recently_damaged: bool = false
+
 var dialogue_active: bool = false
 var dialogue_box: Panel
 var dialogue_label: Label
@@ -158,7 +163,15 @@ func _ready() -> void:
 	dialogue_box.add_child(continue_hint) 
 	
 	canvas.add_child(dialogue_box)
-	
+
+	# Instanciar logger e iniciar sessão
+	if LoggerClass:
+		logger = LoggerClass.new()
+		add_child(logger)
+		logger.start_new_session()
+	else:
+		logger = null
+
 	_load_map(2)  # Começar direto na Sala do Chefe
 
 func _load_map(map_index: int) -> void:
@@ -388,22 +401,53 @@ func _show_battle_options():
 	conversation_options_container.anchor_right = 0.98
 	conversation_options_container.anchor_bottom = 0.98
 	var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
-	for option in options:
+	for i in range(len(options)):
+		var option = options[i]
 		var btn = Button.new()
 		btn.text = option.text
-		btn.pressed.connect(func(): _on_battle_option_selected(option))
+		# captura o índice para sabermos qual opção foi escolhida
+		btn.pressed.connect(func(opt_idx=i, opt_val=option): _on_battle_option_selected(opt_val, opt_idx))
 		conversation_options_container.add_child(btn)
+
+	# Log: opções exibidas
+	if logger:
+		logger.log_event("option_displayed", {"dialog_id": current_battle_round}, player_grid_pos.floor())
 	battle_ui.add_child(conversation_options_container)
 
-func _on_battle_option_selected(option: Dictionary):
+func _on_battle_option_selected(option: Dictionary, option_index: int = -1):
+	# Se veio de um dano recente, isto pode ser considerado uma reação
+	if recently_damaged and logger:
+		logger.log_action("reaction_action", {"option_number": option_index}, player_grid_pos.floor())
+		recently_damaged = false
+
+	# Log da ação de seleção de opção
+	if logger:
+		var alignment_tag = "good" if option.get("enemy_hp", 0) < 0 else "bad"
+		logger.log_action("option_selected", {"dialog_id": current_battle_round, "option_number": option_index, "narrative_alignment_tag": alignment_tag}, player_grid_pos.floor())
+
+	last_selected_option_index = option_index
+
+	# Guardar estados antigos para detectar mudanças de HP
+	var old_player_hp = player_hp
+	var old_enemy_hp = battle_enemy.hp
+
 	player_hp += option.player_hp
 	battle_enemy.hp += option.enemy_hp
+
 	if player_hp > player_max_hp:
 		player_hp = player_max_hp
 	if battle_enemy.hp < 0:
 		battle_enemy.hp = 0
 	if player_hp < 0:
 		player_hp = 0
+
+	# Log de mudanças de estado (HP)
+	if logger:
+		if player_hp != old_player_hp:
+			logger.log_state("heath_changed", {"who": "player", "old_health_value": old_player_hp, "option_number": option_index}, player_grid_pos.floor())
+		if battle_enemy and battle_enemy.hp != old_enemy_hp:
+			logger.log_state("heath_changed", {"who": "enemy", "old_health_value": old_enemy_hp, "option_number": option_index}, player_grid_pos.floor())
+
 	_update_battle_ui()
 	_show_battle_result(option.result)
 	current_battle_round += 1
@@ -674,11 +718,16 @@ func _show_battle_options_in_dialogue():
 	conversation_options_container.anchor_right = 0.98
 	conversation_options_container.anchor_bottom = 0.98
 	var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
-	for option in options:
+	for i in range(len(options)):
+		var option = options[i]
 		var btn = Button.new()
 		btn.text = option.text
-		btn.pressed.connect(func(): _on_battle_option_selected(option))
+		btn.pressed.connect(func(idx=i, opt=option): _on_battle_option_selected(opt, idx))
 		conversation_options_container.add_child(btn)
+
+	# Log: opções exibidas (via diálogo)
+	if logger:
+		logger.log_event("option_displayed", {"dialog_id": current_battle_round}, player_grid_pos.floor())
 	dialogue_box.add_child(conversation_options_container)
 
 func _on_conversation_option(option_index: int) -> void:
@@ -732,9 +781,15 @@ func _on_attack_pressed() -> void:
 		return
 	
 	var enemy_damage = battle_enemy.attack + randi() % 3
+	var old_player_hp = player_hp
 	player_hp -= enemy_damage
 	dialogue_text.text = "* " + battle_enemy.name + " attacks!\n* You took " + str(enemy_damage) + " damage!"
 	_update_battle_ui()
+
+	# Log de mudança de HP do jogador e marcar que sofreu dano (para reações)
+	if logger and player_hp != old_player_hp:
+		logger.log_state("heath_changed", {"who": "player", "old_health_value": old_player_hp, "option_number": last_selected_option_index}, player_grid_pos.floor())
+		recently_damaged = true
 	
 	await get_tree().create_timer(1.5).timeout
 	
@@ -816,7 +871,7 @@ func _draw() -> void:
 		elif item.type == "player":
 			_draw_player_sprite(screen_pos, Color.CYAN)
 
-func _draw_npc(pos: Vector2, obj: Dictionary) -> void:
+func _draw_npc(pos: Vector2, _obj: Dictionary) -> void:
 	# Deslocar um pouco para cima e desenhar um círculo verde
 	var npc_pos = pos + Vector2(0, -20)
 	draw_circle(npc_pos, 14, Color(0, 1, 0))
@@ -855,6 +910,6 @@ func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 	])
 	draw_polygon(body_points, PackedColorArray([color.darkened(0.3)]))
 
-func _draw_enemy(pos: Vector2, enemy: Dictionary) -> void:
+func _draw_enemy(pos: Vector2, _enemy: Dictionary) -> void:
 	var enemy_pos = pos + Vector2(0, -20)
 	draw_circle(enemy_pos, 15, Color.RED)

@@ -187,7 +187,7 @@ func _update_dialogue(message: String):
 
 ## Ação: Atacar
 func _on_attack_pressed():
-	var damage := player_stats["attack"] + randi() % 5
+	var damage: int = player_stats["attack"] + randi() % 5
 	enemy_stats["hp"] -= damage
 	
 	_update_dialogue("Você causou %d de dano!" % damage)
@@ -218,7 +218,7 @@ func _on_flee_pressed():
 
 ## Turno do inimigo
 func _enemy_turn():
-	var damage := enemy_stats["attack"] + randi() % 3
+	var damage: int = enemy_stats["attack"] + randi() % 3
 	player_stats["hp"] -= damage
 	
 	_update_dialogue("%s te atacou! -%d HP" % [enemy_stats["name"], damage])

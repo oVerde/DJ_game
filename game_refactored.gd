@@ -102,7 +102,7 @@ func _generate_walls(map: Dictionary) -> void:
 ## Carrega um novo mapa
 func _load_map(map_index: int) -> void:
 	current_map_index = map_index
-	var map := maps[current_map_index]
+	var map: Dictionary = maps[current_map_index]
 	print("_load_map: Loaded map:", map["name"], "enemies=", map["enemies"])
 	player_grid_pos = map["player_spawn"]
 	nearby_interactable = null
@@ -141,7 +141,7 @@ func _handle_battle(_delta: float) -> void:
 
 ## Desenha o estado de exploração
 func _draw_exploration() -> void:
-	var map := maps[current_map_index]
+	var map: Dictionary = maps[current_map_index]
 	var camera_offset := -camera.position
 	
 	map_renderer.set_camera_offset(camera_offset)
@@ -166,7 +166,7 @@ func _draw_exploration() -> void:
 
 ## Verifica se uma posição é transitável
 func _is_walkable(pos: Vector2) -> bool:
-	var map := maps[current_map_index]
+	var map: Dictionary = maps[current_map_index]
 	
 	# Verificar limites
 	if not IsometricUtils.is_position_valid(pos, map["size"]):
@@ -182,7 +182,7 @@ func _is_walkable(pos: Vector2) -> bool:
 
 ## Verifica objetos próximos para interação
 func _check_interactions() -> void:
-	var map := maps[current_map_index]
+	var map: Dictionary = maps[current_map_index]
 	nearby_interactable = null
 	
 	# Verificar portas
