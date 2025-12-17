@@ -39,7 +39,7 @@ static func get_data() -> Dictionary:
 			# Slime - inimigo principal do mapa
 			{
 				"pos": Vector2(10, 6),
-				"name": "Slime",
+				"name": "Espelho",
 				"hp": 30,
 				"attack": 5
 			}

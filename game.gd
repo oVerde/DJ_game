@@ -48,7 +48,7 @@ var maps = [
 			{"pos": Vector2(0, 6), "leads_to": 1, "direction": "west"}
 		],
 		"enemies": [
-			{"pos": Vector2(10, 6), "name": "Slime", "hp": 30, "attack": 5}
+			{"pos": Vector2(10, 6), "name": "Espelho", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."}
 		]
 	}
 ]
@@ -61,6 +61,14 @@ var battle_enemy = null
 var player_hp: int = 100
 var player_max_hp: int = 100
 var player_attack: int = 10
+
+var dialogue_active: bool = false
+var dialogue_box: Panel
+var dialogue_label: Label
+var pending_battle_enemy = null
+
+var conversation_menu_active: bool = false
+var conversation_options_container: Control
 
 func _ready() -> void:
 	camera = Camera2D.new()
@@ -81,7 +89,47 @@ func _ready() -> void:
 	battle_ui.visible = false
 	canvas.add_child(battle_ui)
 	
-	_load_map(0)
+	# Criar UI de diálogo
+	dialogue_box = Panel.new()
+	dialogue_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	dialogue_box.offset_left = -400
+	dialogue_box.offset_right = 400
+	dialogue_box.offset_top = -150
+	dialogue_box.offset_bottom = -30
+	dialogue_box.visible = false
+	
+	var dialogue_style = StyleBoxFlat.new()
+	dialogue_style.bg_color = Color(0.1, 0.1, 0.1, 0.95)
+	dialogue_style.border_color = Color.WHITE
+	dialogue_style.set_border_width_all(3)
+	dialogue_style.set_corner_radius_all(10)
+	dialogue_box.add_theme_stylebox_override("panel", dialogue_style)
+	
+	dialogue_label = Label.new()
+	dialogue_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialogue_label.offset_left = 20
+	dialogue_label.offset_right = -20
+	dialogue_label.offset_top = 20
+	dialogue_label.offset_bottom = -20
+	dialogue_label.add_theme_font_size_override("font_size", 20)
+	dialogue_label.add_theme_color_override("font_color", Color.WHITE)
+	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialogue_box.add_child(dialogue_label)
+	
+	var continue_hint = Label.new()
+	continue_hint.text = "[Pressione E para continuar]"
+	continue_hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	continue_hint.offset_left = -250
+	continue_hint.offset_right = -20
+	continue_hint.offset_top = -30
+	continue_hint.offset_bottom = -10
+	continue_hint.add_theme_font_size_override("font_size", 14)
+	continue_hint.add_theme_color_override("font_color", Color(1, 1, 0.5, 0.8))
+	dialogue_box.add_child(continue_hint)
+	
+	canvas.add_child(dialogue_box)
+	
+	_load_map(2)  # Começar direto na Sala do Chefe
 
 func _load_map(map_index: int) -> void:
 	current_map = map_index
@@ -98,6 +146,14 @@ func _load_map(map_index: int) -> void:
 	
 	for door in map.doors:
 		map.walls.erase(door.pos)
+	
+	# Debug: verificar objetos
+	if map.has("objects"):
+		print("Objetos encontrados: ", map["objects"].size())
+		for obj in map["objects"]:
+			print("  - ", obj.name, " em ", obj.pos)
+	else:
+		print("Sem objetos neste mapa")
 	
 	print("Carregado: ", map.name)
 	queue_redraw()
@@ -116,6 +172,10 @@ func _process(delta: float) -> void:
 	_check_interactions()
 
 func _handle_exploration(delta: float) -> void:
+	# Bloquear movimento enquanto há diálogo ativo
+	if dialogue_active:
+		return
+	
 	var input_dir = Vector2.ZERO
 	
 	if Input.is_action_pressed("ui_up") or Input.is_key_pressed(KEY_W):
@@ -166,6 +226,12 @@ func _is_valid_position(pos: Vector2) -> bool:
 	return true
 
 func _check_interactions() -> void:
+	# Se diálogo está ativo, E fecha o diálogo
+	if dialogue_active:
+		if Input.is_action_just_pressed("interact"):
+			_close_dialogue()
+		return
+	
 	var map = maps[current_map]
 	var player_grid = player_grid_pos.floor()
 	nearby_interactable = null
@@ -173,27 +239,50 @@ func _check_interactions() -> void:
 	for door in map.doors:
 		if player_grid.distance_to(door.pos) < 1.5:
 			nearby_interactable = {"type": "door", "data": door}
-			interaction_label.text = "Pressione E para passar"
+			interaction_label.text = "[E] Entrar"
 			interaction_label.visible = true
 			
 			if Input.is_action_just_pressed("interact"):
 				_enter_door(door)
 			return
 	
+
 	for enemy in map.enemies:
-		if player_grid.distance_to(enemy.pos) < 2.0:
+		if enemy.hp > 0 and player_grid.distance_to(enemy.pos) < 2.0:
 			nearby_interactable = {"type": "enemy", "data": enemy}
-			interaction_label.text = "Pressione E para lutar com " + enemy.name
+			interaction_label.text = "[E] " + enemy.name
 			interaction_label.visible = true
 			
 			if Input.is_action_just_pressed("interact"):
-				_start_battle(enemy)
+				_show_dialogue(enemy)
 			return
 	
 	interaction_label.visible = false
 
 func _enter_door(door: Dictionary) -> void:
 	_load_map(door.leads_to)
+
+func _show_dialogue(enemy: Dictionary) -> void:
+	if dialogue_active:
+		return
+	
+	dialogue_active = true
+	pending_battle_enemy = enemy
+	interaction_label.visible = false
+	
+	# Mostrar diálogo do inimigo
+	var dialogue_text = enemy.get("dialogue", "...")
+	dialogue_label.text = dialogue_text
+	dialogue_box.visible = true
+
+func _close_dialogue() -> void:
+	dialogue_active = false
+	dialogue_box.visible = false
+	
+	# Se havia um inimigo pendente, iniciar batalha
+	if pending_battle_enemy:
+		_start_battle(pending_battle_enemy)
+		pending_battle_enemy = null
 
 func _start_battle(enemy: Dictionary) -> void:
 	current_state = GameState.BATTLE
@@ -206,155 +295,196 @@ func _create_battle_ui() -> Control:
 	var ui = Control.new()
 	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
+	# Fundo simples
 	var bg = ColorRect.new()
-	bg.color = Color.BLACK
+	bg.color = Color(0.05, 0.05, 0.08, 1.0)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(bg)
 	
-	var main_container = Control.new()
-	main_container.set_anchors_preset(Control.PRESET_CENTER)
-	main_container.offset_left = -320
-	main_container.offset_top = -280
-	main_container.offset_right = 320
-	main_container.offset_bottom = 280
-	ui.add_child(main_container)
+	# Container principal
+	var main = Control.new()
+	main.set_anchors_preset(Control.PRESET_FULL_RECT)
+	main.offset_left = 40
+	main.offset_right = -40
+	main.offset_top = 40
+	main.offset_bottom = -40
+	ui.add_child(main)
 	
-	var enemy_container = Control.new()
-	enemy_container.position = Vector2(320, 100)
-	main_container.add_child(enemy_container)
-	
-	var enemy_visual = ColorRect.new()
-	enemy_visual.name = "EnemyVisual"
-	enemy_visual.custom_minimum_size = Vector2(100, 100)
-	enemy_visual.size = Vector2(100, 100)
-	enemy_visual.position = Vector2(-50, -50)
-	enemy_visual.color = Color(0.8, 0.2, 0.2)
-	enemy_container.add_child(enemy_visual)
-	
+	# ===== NOME DO INIMIGO (Topo) =====
 	var enemy_name = Label.new()
 	enemy_name.name = "EnemyName"
-	enemy_name.position = Vector2(-100, -80)
-	enemy_name.custom_minimum_size = Vector2(200, 0)
-	enemy_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	enemy_name.add_theme_font_size_override("font_size", 24)
-	enemy_name.add_theme_color_override("font_color", Color.WHITE)
-	enemy_container.add_child(enemy_name)
+	enemy_name.text = "Espelho"
+	enemy_name.position = Vector2(0, 10)
+	enemy_name.add_theme_font_size_override("font_size", 32)
+	enemy_name.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0))
+	main.add_child(enemy_name)
 	
-	var dialogue_y = 220
+	# Linha separadora
+	var line1 = ColorRect.new()
+	line1.position = Vector2(0, 50)
+	line1.size = Vector2(1200, 2)
+	line1.color = Color(0.3, 0.5, 0.8, 0.5)
+	main.add_child(line1)
 	
-	var dialogue_border = ColorRect.new()
-	dialogue_border.position = Vector2(60, dialogue_y)
-	dialogue_border.size = Vector2(520, 120)
-	dialogue_border.color = Color.WHITE
-	main_container.add_child(dialogue_border)
+	# ===== DIÁLOGO CENTRAL =====
+	var dialogue = Label.new()
+	dialogue.name = "DialogueText"
+	dialogue.text = "O espelho reflete seu olhar..."
+	dialogue.position = Vector2(0, 80)
+	dialogue.size = Vector2(1200, 200)
+	dialogue.add_theme_font_size_override("font_size", 20)
+	dialogue.add_theme_color_override("font_color", Color.WHITE)
+	dialogue.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialogue.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	main.add_child(dialogue)
 	
-	var dialogue_bg = ColorRect.new()
-	dialogue_bg.position = Vector2(68, dialogue_y + 8)
-	dialogue_bg.size = Vector2(504, 104)
-	dialogue_bg.color = Color.BLACK
-	main_container.add_child(dialogue_bg)
+	# Linha separadora
+	var line2 = ColorRect.new()
+	line2.position = Vector2(0, 300)
+	line2.size = Vector2(1200, 2)
+	line2.color = Color(0.3, 0.5, 0.8, 0.5)
+	main.add_child(line2)
 	
-	var dialogue_text = Label.new()
-	dialogue_text.name = "DialogueText"
-	dialogue_text.position = Vector2(80, dialogue_y + 15)
-	dialogue_text.custom_minimum_size = Vector2(480, 80)
-	dialogue_text.text = "* You got lost."
-	dialogue_text.add_theme_font_size_override("font_size", 18)
-	dialogue_text.add_theme_color_override("font_color", Color.WHITE)
-	dialogue_text.autowrap_mode = TextServer.AUTOWRAP_WORD
-	main_container.add_child(dialogue_text)
+	# ===== STATUS (HP) =====
+	var hp_section = Control.new()
+	hp_section.position = Vector2(0, 330)
+	main.add_child(hp_section)
 	
-	var status_y = 360
+	var enemy_hp_label = Label.new()
+	enemy_hp_label.text = "Inimigo HP:"
+	enemy_hp_label.add_theme_font_size_override("font_size", 14)
+	enemy_hp_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1.0))
+	hp_section.add_child(enemy_hp_label)
 	
-	var player_name = Label.new()
-	player_name.position = Vector2(60, status_y)
-	player_name.text = "FRISK  LV19"
-	player_name.add_theme_font_size_override("font_size", 18)
-	player_name.add_theme_color_override("font_color", Color.WHITE)
-	main_container.add_child(player_name)
+	var enemy_hp_bar_bg = ColorRect.new()
+	enemy_hp_bar_bg.position = Vector2(150, 4)
+	enemy_hp_bar_bg.size = Vector2(300, 16)
+	enemy_hp_bar_bg.color = Color(0.15, 0.15, 0.15, 1.0)
+	hp_section.add_child(enemy_hp_bar_bg)
 	
-	var hp_label = Label.new()
-	hp_label.position = Vector2(230, status_y)
-	hp_label.text = "HP"
-	hp_label.add_theme_font_size_override("font_size", 18)
-	hp_label.add_theme_color_override("font_color", Color.WHITE)
-	main_container.add_child(hp_label)
+	var enemy_hp_bar = ColorRect.new()
+	enemy_hp_bar.name = "EnemyHPBar"
+	enemy_hp_bar.position = Vector2(150, 4)
+	enemy_hp_bar.size = Vector2(300, 16)
+	enemy_hp_bar.color = Color(1.0, 0.3, 0.3, 1.0)
+	hp_section.add_child(enemy_hp_bar)
 	
-	var hp_bar_border = ColorRect.new()
-	hp_bar_border.position = Vector2(270, status_y + 3)
-	hp_bar_border.size = Vector2(120, 20)
-	hp_bar_border.color = Color.WHITE
-	main_container.add_child(hp_bar_border)
+	var enemy_hp_text = Label.new()
+	enemy_hp_text.name = "EnemyHP"
+	enemy_hp_text.text = "30/30"
+	enemy_hp_text.position = Vector2(460, 0)
+	enemy_hp_text.add_theme_font_size_override("font_size", 14)
+	enemy_hp_text.add_theme_color_override("font_color", Color.WHITE)
+	hp_section.add_child(enemy_hp_text)
 	
-	var hp_bar_bg = ColorRect.new()
-	hp_bar_bg.position = Vector2(272, status_y + 5)
-	hp_bar_bg.size = Vector2(116, 16)
-	hp_bar_bg.color = Color.BLACK
-	main_container.add_child(hp_bar_bg)
-	
-	var hp_bar_fill = ColorRect.new()
-	hp_bar_fill.name = "HPBarFill"
-	hp_bar_fill.position = Vector2(272, status_y + 5)
-	hp_bar_fill.size = Vector2(116, 16)
-	hp_bar_fill.color = Color(1.0, 1.0, 0.0)
-	main_container.add_child(hp_bar_fill)
-	
+	# Player HP
 	var player_hp_label = Label.new()
-	player_hp_label.name = "PlayerHP"
-	player_hp_label.position = Vector2(400, status_y)
-	player_hp_label.add_theme_font_size_override("font_size", 18)
-	player_hp_label.add_theme_color_override("font_color", Color.WHITE)
-	main_container.add_child(player_hp_label)
+	player_hp_label.text = "Seu HP:"
+	player_hp_label.position = Vector2(600, 0)
+	player_hp_label.add_theme_font_size_override("font_size", 14)
+	player_hp_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1.0))
+	hp_section.add_child(player_hp_label)
 	
-	var enemy_hp = Label.new()
-	enemy_hp.name = "EnemyHP"
-	enemy_hp.position = Vector2(500, status_y)
-	enemy_hp.add_theme_font_size_override("font_size", 16)
-	enemy_hp.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-	main_container.add_child(enemy_hp)
+	var player_hp_bar_bg = ColorRect.new()
+	player_hp_bar_bg.position = Vector2(720, 4)
+	player_hp_bar_bg.size = Vector2(200, 16)
+	player_hp_bar_bg.color = Color(0.15, 0.15, 0.15, 1.0)
+	hp_section.add_child(player_hp_bar_bg)
 	
-	var buttons_y = 420
-	var button_spacing = 150
-	var transparent_style = StyleBoxFlat.new()
-	transparent_style.bg_color = Color(0, 0, 0, 0)
+	var player_hp_bar = ColorRect.new()
+	player_hp_bar.name = "PlayerHPBar"
+	player_hp_bar.position = Vector2(720, 4)
+	player_hp_bar.size = Vector2(200, 16)
+	player_hp_bar.color = Color(0.3, 1.0, 0.3, 1.0)
+	hp_section.add_child(player_hp_bar)
 	
-	_create_battle_button(main_container, "FIGHT", 40, buttons_y, Color(1.0, 0.0, 0.0), _on_attack_pressed, transparent_style)
-	_create_battle_button(main_container, "ACT", 40 + button_spacing, buttons_y, Color(1.0, 1.0, 0.0), func(): pass, transparent_style)
-	_create_battle_button(main_container, "ITEM", 40 + button_spacing * 2, buttons_y, Color(0.0, 1.0, 1.0), func(): pass, transparent_style)
-	_create_battle_button(main_container, "MERCY", 40 + button_spacing * 3, buttons_y, Color(1.0, 1.0, 0.0), _on_flee_pressed, transparent_style)
+	var player_hp_text = Label.new()
+	player_hp_text.name = "PlayerHP"
+	player_hp_text.text = "100/100"
+	player_hp_text.position = Vector2(930, 0)
+	player_hp_text.add_theme_font_size_override("font_size", 14)
+	player_hp_text.add_theme_color_override("font_color", Color.WHITE)
+	hp_section.add_child(player_hp_text)
+	
+	# ===== MENU DE AÇÕES =====
+	var actions = Control.new()
+	actions.position = Vector2(0, 400)
+	main.add_child(actions)
+	
+	var btn_positions = [0, 290, 580, 870]
+	var btn_colors = [Color(1.0, 0.6, 0.2, 1.0), Color(0.3, 1.0, 0.8, 1.0), Color(0.8, 0.6, 1.0, 1.0), Color(1.0, 0.8, 0.3, 1.0)]
+	var btn_texts = ["Conversar", "Act", "Item", "Mercy"]
+	var btn_callbacks = [_on_conversar_pressed, func(): pass, func(): pass, _on_flee_pressed]
+	
+	for i in range(4):
+		var btn = Button.new()
+		btn.position = Vector2(btn_positions[i], 0)
+		btn.size = Vector2(270, 40)
+		btn.text = btn_texts[i]
+		btn.flat = true
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.add_theme_color_override("font_color", btn_colors[i])
+		
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(btn_colors[i].r * 0.2, btn_colors[i].g * 0.2, btn_colors[i].b * 0.2, 0.8)
+		style.border_color = btn_colors[i]
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", style)
+		btn.add_theme_stylebox_override("hover", style)
+		
+		btn.pressed.connect(btn_callbacks[i])
+		actions.add_child(btn)
+	
+	# ===== MENU DE CONVERSA (OCULTO) =====
+	conversation_options_container = Control.new()
+	conversation_options_container.name = "ConversationOptions"
+	conversation_options_container.visible = false
+	conversation_options_container.position = Vector2(0, 300)
+	main.add_child(conversation_options_container)
+	
+	# Background para o menu
+	var conv_bg = ColorRect.new()
+	conv_bg.size = Vector2(1200, 250)
+	conv_bg.color = Color(0.02, 0.02, 0.05, 0.95)
+	conversation_options_container.add_child(conv_bg)
+	conversation_options_container.move_child(conv_bg, 0)  # Enviar para trás
+	
+	var conv_title = Label.new()
+	conv_title.text = "O que você quer dizer?"
+	conv_title.add_theme_font_size_override("font_size", 18)
+	conv_title.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
+	conversation_options_container.add_child(conv_title)
+	
+	for i in range(5):
+		var opt_btn = Button.new()
+		opt_btn.name = "OptionBtn" + str(i)
+		opt_btn.position = Vector2(0, 40 + i * 45)
+		opt_btn.size = Vector2(1200, 40)
+		opt_btn.flat = true
+		opt_btn.add_theme_font_size_override("font_size", 16)
+		opt_btn.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
+		
+		var opt_style = StyleBoxFlat.new()
+		opt_style.bg_color = Color(0.1, 0.2, 0.3, 0.6)
+		opt_style.border_color = Color(0.4, 0.8, 1.0, 0.5)
+		opt_style.set_border_width_all(1)
+		opt_style.set_corner_radius_all(3)
+		opt_btn.add_theme_stylebox_override("normal", opt_style)
+		opt_btn.add_theme_stylebox_override("hover", opt_style)
+		
+		opt_btn.pressed.connect(_on_conversation_option.bind(i))
+		conversation_options_container.add_child(opt_btn)
+		
+		var opt_label = Label.new()
+		opt_label.name = "OptionLabel" + str(i)
+		opt_label.text = "..."
+		opt_label.add_theme_font_size_override("font_size", 16)
+		opt_label.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
+		opt_label.position = Vector2(15, 11)
+		opt_btn.add_child(opt_label)
 	
 	return ui
-
-func _create_battle_button(container: Control, text: String, pos_x: float, pos_y: float, btn_color: Color, callback: Callable, style: StyleBoxFlat) -> void:
-	var btn_container = Control.new()
-	btn_container.position = Vector2(pos_x, pos_y)
-	container.add_child(btn_container)
-	
-	var border = ColorRect.new()
-	border.size = Vector2(110, 42)
-	border.color = Color.WHITE
-	btn_container.add_child(border)
-	
-	var btn_bg = ColorRect.new()
-	btn_bg.position = Vector2(4, 4)
-	btn_bg.size = Vector2(102, 34)
-	btn_bg.color = Color.BLACK
-	btn_container.add_child(btn_bg)
-	
-	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(110, 42)
-	btn.flat = true
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("hover", style)
-	btn.pressed.connect(callback)
-	btn_container.add_child(btn)
-	
-	var label = Label.new()
-	label.position = Vector2(10, 10)
-	label.text = "* " + text
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", btn_color)
-	btn_container.add_child(label)
 
 func _update_battle_ui() -> void:
 	if not battle_enemy or not battle_ui:
@@ -362,18 +492,95 @@ func _update_battle_ui() -> void:
 	
 	var enemy_name_label = battle_ui.find_child("EnemyName", true, false)
 	var enemy_hp_label = battle_ui.find_child("EnemyHP", true, false)
+	var enemy_hp_bar = battle_ui.find_child("EnemyHPBar", true, false)
 	var player_hp_label = battle_ui.find_child("PlayerHP", true, false)
-	var hp_bar_fill = battle_ui.find_child("HPBarFill", true, false)
+	var player_hp_bar = battle_ui.find_child("PlayerHPBar", true, false)
 	
 	if enemy_name_label:
 		enemy_name_label.text = battle_enemy.name
+	
 	if enemy_hp_label:
-		enemy_hp_label.text = "HP: " + str(max(0, battle_enemy.hp))
+		enemy_hp_label.text = str(max(0, battle_enemy.hp)) + "/" + str(battle_enemy.get("max_hp", 30))
+	
+	if enemy_hp_bar:
+		var enemy_max_hp = float(battle_enemy.get("max_hp", 30))
+		var hp_percent = float(max(0, battle_enemy.hp)) / enemy_max_hp
+		enemy_hp_bar.size.x = 200 * clamp(hp_percent, 0.0, 1.0)
+	
 	if player_hp_label:
-		player_hp_label.text = str(player_hp) + " / " + str(player_max_hp)
-	if hp_bar_fill:
+		player_hp_label.text = str(player_hp) + "/" + str(player_max_hp)
+	
+	if player_hp_bar:
 		var hp_percent = float(player_hp) / float(player_max_hp)
-		hp_bar_fill.size.x = 116 * clamp(hp_percent, 0.0, 1.0)
+		player_hp_bar.size.x = 270 * clamp(hp_percent, 0.0, 1.0)
+
+func _on_conversar_pressed() -> void:
+	if not battle_enemy:
+		return
+	
+	conversation_menu_active = true
+	
+	# Ocultar diálogo
+	var dialogue_text = battle_ui.find_child("DialogueText", true, false)
+	if dialogue_text:
+		dialogue_text.visible = false
+	
+	# Mostrar opções de conversa
+	conversation_options_container.visible = true
+	
+	# Definir opções de conversa baseadas no inimigo
+	var options = []
+	if battle_enemy.name == "Espelho":
+		options = [
+			"* Quem é você?",
+			"* Por que está aqui?",
+			"* O que você quer de mim?",
+			"* Você é real?",
+			"* [Voltar]"
+		]
+	else:
+		options = [
+			"* Olá...",
+			"* O que você é?",
+			"* Podemos conversar?",
+			"* ...",
+			"* [Voltar]"
+		]
+	
+	# Atualizar labels das opções
+	for i in range(5):
+		var label = conversation_options_container.find_child("OptionLabel" + str(i), true, false)
+		if label:
+			label.text = options[i]
+
+func _on_conversation_option(option_index: int) -> void:
+	conversation_menu_active = false
+	conversation_options_container.visible = false
+	
+	# Mostrar diálogo novamente
+	var dialogue_text = battle_ui.find_child("DialogueText", true, false)
+	if not dialogue_text:
+		return
+	
+	dialogue_text.visible = true
+	
+	if option_index == 4:  # Opção "Voltar"
+		dialogue_text.text = "* You got lost."
+		return
+	
+	# Respostas baseadas no inimigo e opção escolhida
+	if battle_enemy.name == "Espelho":
+		match option_index:
+			0:  # Quem é você?
+				dialogue_text.text = "* O espelho reflete seu próprio olhar...\n* 'Você já sabe a resposta.'"
+			1:  # Por que está aqui?
+				dialogue_text.text = "* O reflexo parece distorcido...\n* 'Para mostrar a verdade.'"
+			2:  # O que você quer de mim?
+				dialogue_text.text = "* O espelho brilha intensamente...\n* 'Encarar quem você realmente é.'"
+			3:  # Você é real?
+				dialogue_text.text = "* O reflexo sorri de forma perturbadora...\n* 'Tão real quanto você.'"
+	else:
+		dialogue_text.text = "* " + battle_enemy.name + " olha para você silenciosamente..."
 
 func _on_attack_pressed() -> void:
 	if not battle_enemy:
@@ -511,9 +718,3 @@ func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 func _draw_enemy(pos: Vector2, enemy: Dictionary) -> void:
 	var enemy_pos = pos + Vector2(0, -20)
 	draw_circle(enemy_pos, 15, Color.RED)
-	draw_circle(enemy_pos, 15, Color.DARK_RED, false, 2.0)
-	
-	var font = ThemeDB.fallback_font
-	var font_size = 14
-	var text_pos = enemy_pos + Vector2(-20, -25)
-	draw_string(font, text_pos, enemy.name, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color.WHITE)
