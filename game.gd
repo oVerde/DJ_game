@@ -53,7 +53,8 @@ var maps = [
 		],
 		"enemies": [
 			{"pos": Vector2(10, 6), "name": "Espelho", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."},
-			{"pos": Vector2(10, 5), "name": "Espelho2", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."}
+			{"pos": Vector2(2, 10), "name": "Livro", "hp": 30, "attack": 5, "dialogue": "Você encontra um livro antigo no canto da sala.", "no_battle": true},
+			{"pos": Vector2(1, 1), "name": "Casaco", "hp": 25, "attack": 4, "dialogue": "Um casaco misterioso está largado no chão.", "no_battle": true}
 		]
 	}
 ]
@@ -73,7 +74,28 @@ var dialogue_label: Label
 var pending_battle_enemy = null
 
 var conversation_menu_active: bool = false
-var conversation_options_container: Control
+var conversation_options_container: Control = null
+var battle_dialogue_rounds = [
+	[
+		{"text": "Encarar a verdade", "player_hp": -18, "enemy_hp": -12, "result": "Você encara a verdade e o espelho se parte um pouco."},
+		{"text": "Fugir da realidade", "player_hp": -28, "enemy_hp": 0, "result": "O espelho brilha e te fere por fugir da verdade."},
+		{"text": "Refletir sobre si", "player_hp": -15, "enemy_hp": -9, "result": "Você reflete e ambos se enfraquecem."},
+		{"text": "Aceitar o passado", "player_hp": -12, "enemy_hp": -8, "result": "Aceitar o passado dói, mas enfraquece o espelho."}
+	],
+	[
+		{"text": "Desafiar o espelho", "player_hp": -20, "enemy_hp": -15, "result": "Você desafia o espelho, que trinca mais."},
+		{"text": "Negar o reflexo", "player_hp": -25, "enemy_hp": -5, "result": "Negar o reflexo te enfraquece, mas o espelho hesita."},
+		{"text": "Buscar esperança", "player_hp": -10, "enemy_hp": -10, "result": "Você busca esperança e o espelho perde força."},
+		{"text": "Gritar com raiva", "player_hp": -22, "enemy_hp": -7, "result": "Sua raiva te consome, mas o espelho se abala."}
+	],
+	[
+		{"text": "Aceitar quem você é", "player_hp": -8, "enemy_hp": -20, "result": "Você aceita quem é, o espelho quase quebra."},
+		{"text": "Desistir", "player_hp": -30, "enemy_hp": 0, "result": "Você desiste e o espelho se fortalece."},
+		{"text": "Pedir perdão", "player_hp": -12, "enemy_hp": -15, "result": "Você pede perdão e o espelho se parte mais."},
+		{"text": "Enfrentar o medo", "player_hp": -15, "enemy_hp": -18, "result": "Você enfrenta o medo e o espelho racha."}
+	]
+]
+var current_battle_round = 0
 
 func _ready() -> void:
 	camera = Camera2D.new()
@@ -288,8 +310,8 @@ func _show_dialogue(enemy: Dictionary) -> void:
 	interaction_label.visible = false
 	
 	# Mostrar diálogo do inimigo
-	var dialogue_text = enemy.get("dialogue", "...")
-	dialogue_label.text = dialogue_text
+	var enemy_dialogue_text = enemy.get("dialogue", "...")
+	dialogue_label.text = enemy_dialogue_text
 	dialogue_box.visible = true
 
 func _show_npc_dialogue(obj: Dictionary) -> void:
@@ -305,13 +327,14 @@ func _show_npc_dialogue(obj: Dictionary) -> void:
 	dialogue_box.visible = true
 
 func _close_dialogue() -> void:
-	dialogue_active = false
-	dialogue_box.visible = false
-	
-	# Se havia um inimigo pendente, iniciar batalha
-	if pending_battle_enemy:
-		_start_battle(pending_battle_enemy)
-		pending_battle_enemy = null
+		dialogue_active = false
+		dialogue_box.visible = false
+
+		# Se havia um inimigo pendente, iniciar batalha, exceto se for só diálogo
+		if pending_battle_enemy:
+			if not pending_battle_enemy.has("no_battle") or not pending_battle_enemy.no_battle:
+				_start_battle(pending_battle_enemy)
+			pending_battle_enemy = null
 
 func _start_battle(enemy: Dictionary) -> void:
 	current_state = GameState.BATTLE
@@ -319,6 +342,65 @@ func _start_battle(enemy: Dictionary) -> void:
 	_update_battle_ui()
 	battle_ui.visible = true
 	print("Batalha iniciada contra ", enemy.name)
+	current_battle_round = 0
+	_show_battle_options()
+
+func _show_battle_options():
+	if conversation_options_container:
+		conversation_options_container.queue_free()
+	conversation_options_container = VBoxContainer.new()
+	conversation_options_container.name = "BattleOptions"
+	conversation_options_container.anchor_left = 0.7
+	conversation_options_container.anchor_top = 0.7
+	conversation_options_container.anchor_right = 0.98
+	conversation_options_container.anchor_bottom = 0.98
+	var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
+	for option in options:
+		var btn = Button.new()
+		btn.text = option.text
+		btn.pressed.connect(func(): _on_battle_option_selected(option))
+		conversation_options_container.add_child(btn)
+	battle_ui.add_child(conversation_options_container)
+
+func _on_battle_option_selected(option: Dictionary):
+	player_hp += option.player_hp
+	battle_enemy.hp += option.enemy_hp
+	if player_hp > player_max_hp:
+		player_hp = player_max_hp
+	if battle_enemy.hp < 0:
+		battle_enemy.hp = 0
+	if player_hp < 0:
+		player_hp = 0
+	_update_battle_ui()
+	_show_battle_result(option.result)
+	current_battle_round += 1
+
+func _show_battle_result(result_text: String):
+	var dialogue = battle_ui.find_child("DialogueText", true, false)
+	if dialogue:
+		dialogue.text = result_text
+	if conversation_options_container:
+		conversation_options_container.queue_free()
+		conversation_options_container = null
+	await get_tree().create_timer(1.5).timeout
+	_check_battle_end()
+
+func _check_battle_end():
+	if player_hp <= 0:
+		_reset_game()
+		return
+	if battle_enemy.hp <= 0:
+		_end_battle(true)
+		return
+	_show_battle_options()
+
+func _reset_game():
+	player_hp = player_max_hp
+	current_state = GameState.EXPLORATION
+	battle_ui.visible = false
+	_load_map(0)
+	print("O jogador morreu. Jogo reiniciado.")
+
 
 func _create_battle_ui() -> Control:
 	var ui = Control.new()
@@ -442,10 +524,10 @@ func _create_battle_ui() -> Control:
 	
 	var btn_positions = [0, 290, 580, 870]
 	var btn_colors = [Color(1.0, 0.6, 0.2, 1.0), Color(0.3, 1.0, 0.8, 1.0), Color(0.8, 0.6, 1.0, 1.0), Color(1.0, 0.8, 0.3, 1.0)]
-	var btn_texts = ["Conversar", "Act", "Item", "Mercy"]
-	var btn_callbacks = [_on_conversar_pressed, func(): pass, func(): pass, _on_flee_pressed]
+	var btn_texts = ["Fugir"]
+	var btn_callbacks = [_on_flee_pressed]
 	
-	for i in range(4):
+	for i in range(len(btn_texts)):
 		var btn = Button.new()
 		btn.position = Vector2(btn_positions[i], 0)
 		btn.size = Vector2(270, 40)
@@ -485,33 +567,23 @@ func _create_battle_ui() -> Control:
 	conv_title.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
 	conversation_options_container.add_child(conv_title)
 	
-	for i in range(5):
-		var opt_btn = Button.new()
-		opt_btn.name = "OptionBtn" + str(i)
-		opt_btn.position = Vector2(0, 40 + i * 45)
-		opt_btn.size = Vector2(1200, 40)
-		opt_btn.flat = true
-		opt_btn.add_theme_font_size_override("font_size", 16)
-		opt_btn.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
-		
-		var opt_style = StyleBoxFlat.new()
-		opt_style.bg_color = Color(0.1, 0.2, 0.3, 0.6)
-		opt_style.border_color = Color(0.4, 0.8, 1.0, 0.5)
-		opt_style.set_border_width_all(1)
-		opt_style.set_corner_radius_all(3)
-		opt_btn.add_theme_stylebox_override("normal", opt_style)
-		opt_btn.add_theme_stylebox_override("hover", opt_style)
-		
-		opt_btn.pressed.connect(_on_conversation_option.bind(i))
-		conversation_options_container.add_child(opt_btn)
-		
-		var opt_label = Label.new()
-		opt_label.name = "OptionLabel" + str(i)
-		opt_label.text = "..."
-		opt_label.add_theme_font_size_override("font_size", 16)
-		opt_label.add_theme_color_override("font_color", Color(0.7, 1.0, 1.0, 1.0))
-		opt_label.position = Vector2(15, 11)
-		opt_btn.add_child(opt_label)
+	for i in range(len(btn_texts)):
+		var btn = Button.new()
+		btn.position = Vector2(btn_positions[i], 0)
+		btn.size = Vector2(270, 40)
+		btn.text = btn_texts[i]
+		btn.flat = true
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.add_theme_color_override("font_color", btn_colors[i])
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(btn_colors[i].r * 0.2, btn_colors[i].g * 0.2, btn_colors[i].b * 0.2, 0.8)
+		style.border_color = btn_colors[i]
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", style)
+		btn.add_theme_stylebox_override("hover", style)
+		btn.pressed.connect(btn_callbacks[i])
+		actions.add_child(btn)
 	
 	return ui
 
@@ -543,44 +615,38 @@ func _update_battle_ui() -> void:
 		var hp_percent = float(player_hp) / float(player_max_hp)
 		player_hp_bar.size.x = 270 * clamp(hp_percent, 0.0, 1.0)
 
-func _on_conversar_pressed() -> void:
-	if not battle_enemy:
-		return
-	
-	conversation_menu_active = true
-	
-	# Ocultar diálogo
-	var dialogue_text = battle_ui.find_child("DialogueText", true, false)
-	if dialogue_text:
-		dialogue_text.visible = false
-	
-	# Mostrar opções de conversa
-	conversation_options_container.visible = true
-	
-	# Definir opções de conversa baseadas no inimigo
-	var options = []
-	if battle_enemy.name == "Espelho":
-		options = [
-			"* Quem é você?",
-			"* Por que está aqui?",
-			"* O que você quer de mim?",
-			"* Você é real?",
-			"* [Voltar]"
-		]
-	else:
-		options = [
-			"* Olá...",
-			"* O que você é?",
-			"* Podemos conversar?",
-			"* ...",
-			"* [Voltar]"
-		]
-	
-	# Atualizar labels das opções
-	for i in range(5):
-		var label = conversation_options_container.find_child("OptionLabel" + str(i), true, false)
-		if label:
-			label.text = options[i]
+
+func _show_conversar_button():
+	if conversation_options_container:
+		conversation_options_container.queue_free()
+	conversation_options_container = VBoxContainer.new()
+	conversation_options_container.name = "ConversarButtonContainer"
+	conversation_options_container.anchor_left = 0.5
+	conversation_options_container.anchor_top = 0.7
+	conversation_options_container.anchor_right = 0.98
+	conversation_options_container.anchor_bottom = 0.98
+	var btn = Button.new()
+	btn.text = "Conversar"
+	btn.pressed.connect(_show_battle_options_in_dialogue)
+	conversation_options_container.add_child(btn)
+	dialogue_box.add_child(conversation_options_container)
+
+func _show_battle_options_in_dialogue():
+	if conversation_options_container:
+		conversation_options_container.queue_free()
+	conversation_options_container = VBoxContainer.new()
+	conversation_options_container.name = "BattleOptionsDialogue"
+	conversation_options_container.anchor_left = 0.5
+	conversation_options_container.anchor_top = 0.7
+	conversation_options_container.anchor_right = 0.98
+	conversation_options_container.anchor_bottom = 0.98
+	var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
+	for option in options:
+		var btn = Button.new()
+		btn.text = option.text
+		btn.pressed.connect(func(): _on_battle_option_selected(option))
+		conversation_options_container.add_child(btn)
+	dialogue_box.add_child(conversation_options_container)
 
 func _on_conversation_option(option_index: int) -> void:
 	conversation_menu_active = false
