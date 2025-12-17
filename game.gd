@@ -201,6 +201,10 @@ func _load_map(map_index: int) -> void:
 	print("Carregado: ", map.name)
 	queue_redraw()
 
+	# Log sensoriality: entrada em sala
+	if logger:
+		logger.log_location_entered(current_map, player_grid_pos.floor())
+
 func _process(delta: float) -> void:
 	if current_state == GameState.EXPLORATION:
 		_handle_exploration(delta)
@@ -316,6 +320,8 @@ func _check_interactions() -> void:
 			_update_interaction_label_text("Entrar")
 			
 			if Input.is_action_just_pressed("interact"):
+				if logger:
+					logger.log_object_touched("door_" + str(door.pos), true, player_grid)
 				_enter_door(door)
 			return
 	
@@ -326,6 +332,8 @@ func _check_interactions() -> void:
 			_update_interaction_label_text(enemy.name)
 			
 			if Input.is_action_just_pressed("interact"):
+				if logger:
+					logger.log_object_touched(enemy.name, true, player_grid)
 				_show_dialogue(enemy)
 			return
 	
@@ -337,6 +345,8 @@ func _check_interactions() -> void:
 				_update_interaction_label_text("Conversar")
 				
 				if Input.is_action_just_pressed("interact"):
+					if logger:
+						logger.log_object_touched(obj.name, false, player_grid)
 					_show_npc_dialogue(obj)
 				return
 	
