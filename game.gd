@@ -72,6 +72,9 @@ var dialogue_active: bool = false
 var dialogue_box: Panel
 var dialogue_label: Label
 var pending_battle_enemy = null
+var last_input_gamepad: bool = false
+var continue_hint: Label = null
+var current_interaction_action: String = ""
 
 var conversation_menu_active: bool = false
 var conversation_options_container: Control = null
@@ -143,8 +146,8 @@ func _ready() -> void:
 	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialogue_box.add_child(dialogue_label)
 	
-	var continue_hint = Label.new()
-	continue_hint.text = "[Pressione E para continuar]"
+	continue_hint = Label.new()
+	continue_hint.text = "[Pressione " + _interact_hint_plain() + " para continuar]"
 	continue_hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	continue_hint.offset_left = -250
 	continue_hint.offset_right = -20
@@ -152,7 +155,7 @@ func _ready() -> void:
 	continue_hint.offset_bottom = -10
 	continue_hint.add_theme_font_size_override("font_size", 14)
 	continue_hint.add_theme_color_override("font_color", Color(1, 1, 0.5, 0.8))
-	dialogue_box.add_child(continue_hint)
+	dialogue_box.add_child(continue_hint) 
 	
 	canvas.add_child(dialogue_box)
 	
@@ -198,6 +201,32 @@ func _process(delta: float) -> void:
 	
 	_check_interactions()
 
+func _input(event) -> void:
+	# Detectar último dispositivo de entrada (joystick vs teclado/mouse)
+	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+		last_input_gamepad = true
+	elif event is InputEventKey or event is InputEventMouseButton:
+		last_input_gamepad = false
+	
+	# Atualizar texto do continue_hint se visível
+	if continue_hint and dialogue_box and dialogue_box.visible:
+		continue_hint.text = "[Pressione " + _interact_hint_plain() + " para continuar]"
+	
+	# Atualizar texto de interação se visível
+	if interaction_label and interaction_label.visible and current_interaction_action != "":
+		_update_interaction_label_text(current_interaction_action)
+
+func _interact_hint() -> String:
+	return "[A]" if last_input_gamepad else "[E]"
+
+func _interact_hint_plain() -> String:
+	return "A" if last_input_gamepad else "E"
+
+func _update_interaction_label_text(action_text: String) -> void:
+	current_interaction_action = action_text
+	interaction_label.text = _interact_hint() + " " + action_text
+	interaction_label.visible = true
+
 func _handle_exploration(delta: float) -> void:
 	# Bloquear movimento enquanto há diálogo ativo
 	if dialogue_active:
@@ -205,13 +234,13 @@ func _handle_exploration(delta: float) -> void:
 	
 	var input_dir = Vector2.ZERO
 	
-	if Input.is_action_pressed("ui_up") or Input.is_key_pressed(KEY_W):
+	if Input.is_action_pressed("move_up"):
 		input_dir.y -= 1
-	if Input.is_action_pressed("ui_down") or Input.is_key_pressed(KEY_S):
+	if Input.is_action_pressed("move_down"):
 		input_dir.y += 1
-	if Input.is_action_pressed("ui_left") or Input.is_key_pressed(KEY_A):
+	if Input.is_action_pressed("move_left"):
 		input_dir.x -= 1
-	if Input.is_action_pressed("ui_right") or Input.is_key_pressed(KEY_D):
+	if Input.is_action_pressed("move_right"):
 		input_dir.x += 1
 	
 	if input_dir == Vector2.ZERO:
@@ -253,7 +282,12 @@ func _is_valid_position(pos: Vector2) -> bool:
 	return true
 
 func _check_interactions() -> void:
-	# Se diálogo está ativo, E fecha o diálogo
+	# Bloquear interações durante batalha
+	if current_state == GameState.BATTLE:
+		interaction_label.visible = false
+		return
+
+	# Se diálogo está ativo, fecha o diálogo
 	if dialogue_active:
 		if Input.is_action_just_pressed("interact"):
 			_close_dialogue()
@@ -266,8 +300,7 @@ func _check_interactions() -> void:
 	for door in map.doors:
 		if player_grid.distance_to(door.pos) < 1.5:
 			nearby_interactable = {"type": "door", "data": door}
-			interaction_label.text = "[E] Entrar"
-			interaction_label.visible = true
+			_update_interaction_label_text("Entrar")
 			
 			if Input.is_action_just_pressed("interact"):
 				_enter_door(door)
@@ -277,8 +310,7 @@ func _check_interactions() -> void:
 	for enemy in map.enemies:
 		if enemy.hp > 0 and player_grid.distance_to(enemy.pos) < 2.0:
 			nearby_interactable = {"type": "enemy", "data": enemy}
-			interaction_label.text = "[E] " + enemy.name
-			interaction_label.visible = true
+			_update_interaction_label_text(enemy.name)
 			
 			if Input.is_action_just_pressed("interact"):
 				_show_dialogue(enemy)
@@ -289,8 +321,7 @@ func _check_interactions() -> void:
 		for obj in map.objects:
 			if obj.type == "npc" and player_grid.distance_to(obj.pos) < 1.5:
 				nearby_interactable = {"type": "npc", "data": obj}
-				interaction_label.text = "[E] Conversar"
-				interaction_label.visible = true
+				_update_interaction_label_text("Conversar")
 				
 				if Input.is_action_just_pressed("interact"):
 					_show_npc_dialogue(obj)
@@ -302,9 +333,10 @@ func _enter_door(door: Dictionary) -> void:
 	_load_map(door.leads_to)
 
 func _show_dialogue(enemy: Dictionary) -> void:
-	if dialogue_active:
+	# Não permitir diálogo durante batalha
+	if dialogue_active or current_state == GameState.BATTLE:
 		return
-	
+
 	dialogue_active = true
 	pending_battle_enemy = enemy
 	interaction_label.visible = false
@@ -315,7 +347,8 @@ func _show_dialogue(enemy: Dictionary) -> void:
 	dialogue_box.visible = true
 
 func _show_npc_dialogue(obj: Dictionary) -> void:
-	if dialogue_active:
+	# Não permitir diálogo durante batalha
+	if dialogue_active or current_state == GameState.BATTLE:
 		return
 	
 	dialogue_active = true
