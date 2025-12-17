@@ -67,8 +67,8 @@ func _ready() -> void:
 	for map in maps:
 		_generate_walls(map)
 	
-	# Carregar mapa inicial
-	_load_map(0)
+	# Carregar mapa inicial (começar no Mapa 2 - Corredor)
+	_load_map(1)
 
 func _process(delta: float) -> void:
 	match current_state:
@@ -103,6 +103,7 @@ func _generate_walls(map: Dictionary) -> void:
 func _load_map(map_index: int) -> void:
 	current_map_index = map_index
 	var map := maps[current_map_index]
+	print("_load_map: Loaded map:", map["name"], "enemies=", map["enemies"])
 	player_grid_pos = map["player_spawn"]
 	nearby_interactable = null
 	interaction_label.visible = false

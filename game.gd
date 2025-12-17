@@ -37,7 +37,11 @@ var maps = [
 			{"pos": Vector2(0, 5), "leads_to": 0, "direction": "west"},
 			{"pos": Vector2(19, 5), "leads_to": 2, "direction": "east"}
 		],
-		"enemies": []
+		"enemies": [],
+		# Objetos do mapa (NPCs, itens, etc.)
+		"objects": [
+			{"pos": Vector2(10, 5), "type": "npc", "name": "Guard", "dialogue": "Bem-vindo ao corredor."}
+		]
 	},
 	{
 		"name": "Sala do Chefe",
@@ -48,7 +52,8 @@ var maps = [
 			{"pos": Vector2(0, 6), "leads_to": 1, "direction": "west"}
 		],
 		"enemies": [
-			{"pos": Vector2(10, 6), "name": "Espelho", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."}
+			{"pos": Vector2(10, 6), "name": "Espelho", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."},
+			{"pos": Vector2(10, 5), "name": "Espelho2", "hp": 30, "attack": 5, "dialogue": "Você se aproxima do espelho... Algo sinistro reflete de volta."}
 		]
 	}
 ]
@@ -257,6 +262,18 @@ func _check_interactions() -> void:
 				_show_dialogue(enemy)
 			return
 	
+	# Verificar NPCs/objetos para interação
+	if map.has("objects"):
+		for obj in map.objects:
+			if obj.type == "npc" and player_grid.distance_to(obj.pos) < 1.5:
+				nearby_interactable = {"type": "npc", "data": obj}
+				interaction_label.text = "[E] Conversar"
+				interaction_label.visible = true
+				
+				if Input.is_action_just_pressed("interact"):
+					_show_npc_dialogue(obj)
+				return
+	
 	interaction_label.visible = false
 
 func _enter_door(door: Dictionary) -> void:
@@ -272,6 +289,18 @@ func _show_dialogue(enemy: Dictionary) -> void:
 	
 	# Mostrar diálogo do inimigo
 	var dialogue_text = enemy.get("dialogue", "...")
+	dialogue_label.text = dialogue_text
+	dialogue_box.visible = true
+
+func _show_npc_dialogue(obj: Dictionary) -> void:
+	if dialogue_active:
+		return
+	
+	dialogue_active = true
+	interaction_label.visible = false
+	
+	# Mostrar diálogo do NPC (não inicia batalha)
+	var dialogue_text = obj.get("dialogue", "...")
 	dialogue_label.text = dialogue_text
 	dialogue_box.visible = true
 
@@ -659,9 +688,14 @@ func _draw() -> void:
 	
 	for enemy in map.enemies:
 		draw_list.append({"pos": enemy.pos, "type": "enemy", "depth": enemy.pos.x + enemy.pos.y, "data": enemy})
-	
+
 	draw_list.append({"pos": player_grid_pos, "type": "player", "depth": player_grid_pos.x + player_grid_pos.y})
 	draw_list.sort_custom(func(a, b): return a.depth < b.depth)
+
+	# Desenhar objetos do mapa (NPCs, itens)
+	if map.has("objects"):
+		for obj in map.objects:
+			draw_list.append({"pos": obj.pos, "type": "npc", "depth": obj.pos.x + obj.pos.y, "data": obj})
 	
 	for x in range(int(map.size.x)):
 		for y in range(int(map.size.y)):
@@ -678,8 +712,15 @@ func _draw() -> void:
 			_draw_iso_tile_filled(screen_pos, Color(0.2, 0.6, 0.2))
 		elif item.type == "enemy":
 			_draw_enemy(screen_pos, item.data)
+		elif item.type == "npc":
+			_draw_npc(screen_pos, item.data)
 		elif item.type == "player":
 			_draw_player_sprite(screen_pos, Color.CYAN)
+
+func _draw_npc(pos: Vector2, obj: Dictionary) -> void:
+	# Deslocar um pouco para cima e desenhar um círculo verde
+	var npc_pos = pos + Vector2(0, -20)
+	draw_circle(npc_pos, 14, Color(0, 1, 0))
 
 func cartesian_to_isometric(cart: Vector2) -> Vector2:
 	return Vector2((cart.x - cart.y) * TILE_WIDTH_HALF, (cart.x + cart.y) * TILE_HEIGHT_HALF)

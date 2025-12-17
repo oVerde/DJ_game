@@ -42,6 +42,12 @@ static func get_data() -> Dictionary:
 				"name": "Espelho",
 				"hp": 30,
 				"attack": 5
-			}
+			},
+			{
+	  			"pos": Vector2(8, 6),    # new enemy position
+	 			"name": "Slime2",
+	   			"hp": 20,
+	  			"attack": 3
+			}	
 		]
 	}
