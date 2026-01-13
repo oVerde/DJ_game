@@ -1,0 +1,2 @@
+test,whereX,whereY,datetime,type,typeof,payload
+17,2,5,2026-01-13T02:14:26,event,location_entered,"{""room_ID"":0}"

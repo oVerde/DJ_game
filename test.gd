@@ -38,6 +38,10 @@ var game_settings = {
 func _ready() -> void:
 	print("Iniciando Menu...")
 	
+	# Inicia música de fundo (continua no jogo)
+	if not AudioManager.music_player.playing:
+		AudioManager.play_music("res://multimedia/music/main_theme.mp3", 0.0, true)
+	
 	# Carrega configurações salvas
 	_load_settings()
 	
@@ -234,11 +238,20 @@ func _create_animated_button(text: String, action_name: String) -> void:
 	buttons.append(btn)
 	
 	# Conectar Sinais para Animação e Ação
-	btn.mouse_entered.connect(_on_button_hover.bind(btn, true))
+	btn.mouse_entered.connect(func(): 
+		AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0)
+		_on_button_hover(btn, true)
+	)
 	btn.mouse_exited.connect(_on_button_hover.bind(btn, false))
-	btn.focus_entered.connect(_on_button_hover.bind(btn, true))
+	btn.focus_entered.connect(func(): 
+		AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0)
+		_on_button_hover(btn, true)
+	)
 	btn.focus_exited.connect(_on_button_hover.bind(btn, false))
-	btn.pressed.connect(_on_button_pressed.bind(action_name))
+	btn.pressed.connect(func(): 
+		AudioManager.play_sfx("res://multimedia/sfx/menu_confirm.wav", -6.0)
+		_on_button_pressed(action_name)
+	)
 
 func _on_button_hover(btn: Button, hovered: bool) -> void:
 	# Cria uma animação suave (Tween)

@@ -73,6 +73,10 @@ var player_hp: int = 100
 var player_max_hp: int = 100
 var player_attack: int = 10
 
+# Audio tracking
+var walk_sound_playing: bool = false
+var walk_audio_player: AudioStreamPlayer
+
 var LoggerClass = preload("res://scripts/utils/logger.gd") # DJLogger
 var logger = null
 var last_selected_option_index: int = -1
@@ -168,6 +172,16 @@ func _ready() -> void:
 	dialogue_box.add_child(continue_hint) 
 	
 	canvas.add_child(dialogue_box)
+
+	# Criar player de áudio para som de caminhada (loop independente)
+	walk_audio_player = AudioStreamPlayer.new()
+	add_child(walk_audio_player)
+	var walk_stream = load("res://multimedia/sfx/walk.wav")
+	if walk_stream:
+		if walk_stream is AudioStreamWAV:
+			walk_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		walk_audio_player.stream = walk_stream
+		walk_audio_player.volume_db = -10.0
 
 	# Instanciar logger e iniciar sessão
 	if LoggerClass:
@@ -266,7 +280,16 @@ func _handle_exploration(delta: float) -> void:
 		input_dir.x += 1
 	
 	if input_dir == Vector2.ZERO:
+		# Para o som de caminhada quando parado
+		if walk_sound_playing and walk_audio_player:
+			walk_audio_player.stop()
+			walk_sound_playing = false
 		return
+	
+	# Toca som de caminhada em loop enquanto se move
+	if not walk_sound_playing and walk_audio_player and not walk_audio_player.playing:
+		walk_audio_player.play()
+		walk_sound_playing = true
 	
 	input_dir = input_dir.normalized()
 	
@@ -365,6 +388,9 @@ func _show_dialogue(enemy: Dictionary) -> void:
 	if dialogue_active or current_state == GameState.BATTLE:
 		return
 
+	# Som de interação
+	AudioManager.play_sfx("res://multimedia/sfx/interaction.wav", -8.0)
+
 	dialogue_active = true
 	pending_battle_enemy = enemy
 	interaction_label.visible = false
@@ -378,6 +404,9 @@ func _show_npc_dialogue(obj: Dictionary) -> void:
 	# Não permitir diálogo durante batalha
 	if dialogue_active or current_state == GameState.BATTLE:
 		return
+	
+	# Som de interação
+	AudioManager.play_sfx("res://multimedia/sfx/interaction.wav", -8.0)
 	
 	dialogue_active = true
 	interaction_label.visible = false
@@ -398,6 +427,10 @@ func _close_dialogue() -> void:
 			pending_battle_enemy = null
 
 func _start_battle(enemy: Dictionary) -> void:
+	# Transição para música de batalha
+	AudioManager.stop_music()
+	AudioManager.play_music("res://multimedia/music/battle_theme.mp3", 0.0, true)
+	
 	current_state = GameState.BATTLE
 	battle_enemy = enemy.duplicate()
 	_update_battle_ui()
@@ -420,8 +453,14 @@ func _show_battle_options():
 		var option = options[i]
 		var btn = Button.new()
 		btn.text = option.text
+		# Sons de menu na batalha
+		btn.mouse_entered.connect(func(): AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0))
+		btn.focus_entered.connect(func(): AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0))
 		# captura o índice para sabermos qual opção foi escolhida
-		btn.pressed.connect(func(opt_idx=i, opt_val=option): _on_battle_option_selected(opt_val, opt_idx))
+		btn.pressed.connect(func(opt_idx=i, opt_val=option): 
+			AudioManager.play_sfx("res://multimedia/sfx/menu_confirm.wav", -6.0)
+			_on_battle_option_selected(opt_val, opt_idx)
+		)
 		conversation_options_container.add_child(btn)
 
 	# Log: opções exibidas
@@ -823,6 +862,10 @@ func _on_flee_pressed() -> void:
 	_end_battle(false)
 
 func _end_battle(victory: bool) -> void:
+	# Retorna à música principal
+	AudioManager.stop_music()
+	AudioManager.play_music("res://multimedia/music/main_theme.mp3", 0.0, true)
+	
 	battle_ui.visible = false
 	current_state = GameState.EXPLORATION
 	

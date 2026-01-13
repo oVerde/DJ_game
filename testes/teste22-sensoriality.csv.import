@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://8831s7p3gf12"
+
+[deps]
+
+files=["res://testes/teste22-sensoriality.whereX.translation", "res://testes/teste22-sensoriality.whereY.translation", "res://testes/teste22-sensoriality.datetime.translation", "res://testes/teste22-sensoriality.type.translation", "res://testes/teste22-sensoriality.typeof.translation", "res://testes/teste22-sensoriality.payload.translation"]
+
+source_file="res://testes/teste22-sensoriality.csv"
+dest_files=["res://testes/teste22-sensoriality.whereX.translation", "res://testes/teste22-sensoriality.whereY.translation", "res://testes/teste22-sensoriality.datetime.translation", "res://testes/teste22-sensoriality.type.translation", "res://testes/teste22-sensoriality.typeof.translation", "res://testes/teste22-sensoriality.payload.translation"]
+
+[params]
+
+compress=true
+delimiter=0

@@ -1,0 +1,2 @@
+test,whereX,whereY,datetime,type,typeof,payload
+10,1,10,2026-01-13T01:59:36,event,option_displayed,"{""dialog_id"":0}"

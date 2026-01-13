@@ -1,0 +1,13 @@
+test,whereX,whereY,datetime,type,typeof,payload
+13,2,10,2026-01-13T02:10:30,event,option_displayed,"{""dialog_id"":0}"
+13,2,10,2026-01-13T02:10:33,action,option_selected,"{""dialog_id"":0,""narrative_alignment_tag"":""good"",""option_number"":0}"
+13,2,10,2026-01-13T02:10:33,state,heath_changed,"{""old_health_value"":100,""option_number"":0,""who"":""player""}"
+13,2,10,2026-01-13T02:10:33,state,heath_changed,"{""old_health_value"":30,""option_number"":0,""who"":""enemy""}"
+13,2,10,2026-01-13T02:10:35,event,option_displayed,"{""dialog_id"":1}"
+13,2,10,2026-01-13T02:10:36,action,option_selected,"{""dialog_id"":1,""narrative_alignment_tag"":""good"",""option_number"":0}"
+13,2,10,2026-01-13T02:10:36,state,heath_changed,"{""old_health_value"":82,""option_number"":0,""who"":""player""}"
+13,2,10,2026-01-13T02:10:36,state,heath_changed,"{""old_health_value"":18,""option_number"":0,""who"":""enemy""}"
+13,2,10,2026-01-13T02:10:37,event,option_displayed,"{""dialog_id"":2}"
+13,2,10,2026-01-13T02:10:38,action,option_selected,"{""dialog_id"":2,""narrative_alignment_tag"":""good"",""option_number"":0}"
+13,2,10,2026-01-13T02:10:38,state,heath_changed,"{""old_health_value"":62,""option_number"":0,""who"":""player""}"
+13,2,10,2026-01-13T02:10:38,state,heath_changed,"{""old_health_value"":3,""option_number"":0,""who"":""enemy""}"

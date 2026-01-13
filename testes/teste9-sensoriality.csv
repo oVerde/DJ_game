@@ -1,0 +1,10 @@
+test,whereX,whereY,datetime,type,typeof,payload
+9,2,5,2026-01-13T01:58:33,event,location_entered,"{""room_ID"":0}"
+9,13,5,2026-01-13T01:58:37,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(14.0, 5.0)""}"
+9,2,5,2026-01-13T01:58:37,event,location_entered,"{""room_ID"":1}"
+9,10,4,2026-01-13T01:58:41,action,object_touched,"{""is_key_item"":false,""object_ID"":""Guard""}"
+9,9,5,2026-01-13T01:58:43,action,object_touched,"{""is_key_item"":false,""object_ID"":""Guard""}"
+9,9,5,2026-01-13T01:58:44,action,object_touched,"{""is_key_item"":false,""object_ID"":""Guard""}"
+9,18,5,2026-01-13T01:58:46,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(19.0, 5.0)""}"
+9,2,6,2026-01-13T01:58:46,event,location_entered,"{""room_ID"":2}"
+9,2,10,2026-01-13T01:58:47,action,object_touched,"{""is_key_item"":true,""object_ID"":""Espelho""}"
