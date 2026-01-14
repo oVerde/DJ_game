@@ -31,6 +31,18 @@ var interaction_label: Label
 var battle_ui_container: Control
 
 func _ready() -> void:
+	# Adicionar background como TextureRect
+	var bg_rect = TextureRect.new()
+	bg_rect.texture = load("res://assets/BG/BG.png")
+	bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	bg_rect.anchor_right = 1.0
+	bg_rect.anchor_bottom = 1.0
+	bg_rect.offset_right = 2000  # Tamanho grande para cobrir a câmera
+	bg_rect.offset_bottom = 2000
+	bg_rect.z_index = -1000  # Atrás de tudo
+	add_child(bg_rect)
+	move_child(bg_rect, 0)  # Mover para o início (atrás)
+	
 	# Configurar câmera
 	camera = Camera2D.new()
 	camera.zoom = Vector2(1.5, 1.5)

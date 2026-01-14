@@ -191,6 +191,9 @@ func _ready() -> void:
 	else:
 		logger = null
 
+	# Initialize textures for tiles (loaded from res://assets/floor/ via TextureManager)
+	TextureManager.init()
+
 	_load_map(0)  # Começar direto na Sala do Chefe
 
 func _load_map(map_index: int) -> void:
@@ -911,17 +914,18 @@ func _draw() -> void:
 	
 	for x in range(int(map.size.x)):
 		for y in range(int(map.size.y)):
-			var tile_pos = cartesian_to_isometric(Vector2(x, y))
-			var color = Color(0.3, 0.3, 0.3)
-			_draw_iso_tile(tile_pos, color)
+			var grid_pos = Vector2(x, y)
+			var tex := TextureManager.get_floor_texture_for_position(grid_pos)
+			var tile_pos = cartesian_to_isometric(grid_pos)
+			_draw_iso_tile_textured(tile_pos, tex)
 	
 	for item in draw_list:
 		var screen_pos = cartesian_to_isometric(item.pos)
 		
 		if item.type == "wall":
-			_draw_iso_tile_filled(screen_pos, Color(0.5, 0.4, 0.3))
+			_draw_iso_tile_textured(screen_pos, TextureManager.get_floor_texture_for_position(item.pos))
 		elif item.type == "door":
-			_draw_iso_tile_filled(screen_pos, Color(0.2, 0.6, 0.2))
+			_draw_iso_tile_textured(screen_pos, TextureManager.get_floor_texture_for_position(item.pos))
 		elif item.type == "enemy":
 			_draw_enemy(screen_pos, item.data)
 		elif item.type == "npc":
@@ -946,23 +950,25 @@ func cartesian_to_isometric(cart: Vector2) -> Vector2:
 	return Vector2((cart.x - cart.y) * TILE_WIDTH_HALF, (cart.x + cart.y) * TILE_HEIGHT_HALF)
 
 func _draw_iso_tile(pos: Vector2, color: Color) -> void:
-	var points = PackedVector2Array([
-		pos + Vector2(0, -TILE_HEIGHT_HALF),
-		pos + Vector2(TILE_WIDTH_HALF, 0),
-		pos + Vector2(0, TILE_HEIGHT_HALF),
-		pos + Vector2(-TILE_WIDTH_HALF, 0)
-	])
-	draw_polygon(points, PackedColorArray([color]))
-	draw_polyline(points, Color.BLACK, 1.0)
+	# Backwards-compatible wrapper: base visuals now use textures.
+	_draw_iso_tile_textured(pos, TextureManager.get_floor_texture())
 
 func _draw_iso_tile_filled(pos: Vector2, color: Color) -> void:
+	# Backwards-compatible wrapper: base visuals now use textures.
+	_draw_iso_tile_textured(pos, TextureManager.get_floor_texture())
+
+func _draw_iso_tile_textured(pos: Vector2, texture: Texture2D) -> void:
+	var top_left = pos - Vector2(TILE_WIDTH_HALF, TILE_HEIGHT_HALF)
+	var rect = Rect2(top_left, Vector2(TILE_WIDTH, TILE_HEIGHT))
+	draw_texture_rect(texture, rect, false)
+	# Keep an outline for legibility
 	var points = PackedVector2Array([
 		pos + Vector2(0, -TILE_HEIGHT_HALF),
 		pos + Vector2(TILE_WIDTH_HALF, 0),
 		pos + Vector2(0, TILE_HEIGHT_HALF),
 		pos + Vector2(-TILE_WIDTH_HALF, 0)
 	])
-	draw_polygon(points, PackedColorArray([color.darkened(0.2)]))
+	draw_polyline(points, Color.BLACK, 1.0)
 
 func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 	var head_pos = pos + Vector2(0, -(PLAYER_HEIGHT + PLAYER_HEAD_RADIUS))

@@ -58,6 +58,9 @@ func _ready() -> void:
 	# Carrega o primeiro mapa
 	_load_map(0)
 
+	# Initialize textures for tiles (loaded from res://assets/floor/ via TextureManager)
+	TextureManager.init()
+
 func _load_map(index: int) -> void:
 	current_map_index = index
 	var map = maps[current_map_index]
@@ -194,23 +197,23 @@ func _draw() -> void:
 	
 	# --- DESENHO ---
 	
-	# A. Desenha o Chão (Sempre atrás)
+	# A. Desenha o Chão (usando texturas de piso)
 	for x in range(size_x):
 		for y in range(size_y):
-			var tile_pos = cartesian_to_isometric(Vector2(x, y))
-			var color = Color(0.3, 0.3, 0.3)
-			
-			# Destaca a saída
-			if Vector2(x, y) == map.exit:
-				color = Color(0.2, 0.8, 0.2) # Verde
-			
-			_draw_iso_tile(tile_pos, color)
+			var grid_pos = Vector2(x, y)
+			var tex := TextureManager.get_floor_texture_for_position(grid_pos)
+			var tile_pos = cartesian_to_isometric(grid_pos)
+			_draw_iso_tile_textured(tile_pos, tex)
+			# Destaca a saída com um marcador, sem alterar o visual base do tile
+			if grid_pos == map.exit:
+				draw_circle(tile_pos + Vector2(0, -TILE_HEIGHT_HALF + 4), 4, Color(0.2, 0.8, 0.2))
 	
 	# B. Desenha Objetos Ordenados (Paredes e Player)
 	for item in draw_list:
 		var screen_pos = cartesian_to_isometric(item.pos)
 		if item.type == "wall":
-			_draw_iso_tile_filled(screen_pos, Color(0.5, 0.4, 0.3)) # Parede Marrom
+			var tex := TextureManager.get_floor_texture_for_position(item.pos)
+			_draw_iso_tile_textured(screen_pos, tex)
 		elif item.type == "player":
 			_draw_player_sprite(screen_pos, Color.CYAN) # Player com altura
 
@@ -218,26 +221,29 @@ func _draw() -> void:
 func cartesian_to_isometric(cart: Vector2) -> Vector2:
 	return Vector2((cart.x - cart.y) * TILE_WIDTH_HALF, (cart.x + cart.y) * TILE_HEIGHT_HALF)
 
-# Desenha um losango (tile plano) - Estilo Hades
+# Desenha um losango (tile plano) - (mantido para compatibilidade)
 func _draw_iso_tile(pos: Vector2, color: Color) -> void:
-	var points = PackedVector2Array([
-		pos + Vector2(0, -TILE_HEIGHT_HALF),
-		pos + Vector2(TILE_WIDTH_HALF, 0),
-		pos + Vector2(0, TILE_HEIGHT_HALF),
-		pos + Vector2(-TILE_WIDTH_HALF, 0)
-	])
-	draw_polygon(points, PackedColorArray([color]))
-	draw_polyline(points, Color.BLACK, 1.0)
+	# Backwards-compatible wrapper: base visuals now use textures.
+	_draw_iso_tile_textured(pos, TextureManager.get_floor_texture())
 
-# Desenha um tile preenchido com cor escurecida - SEM polyline (mais rápido)
+# Desenha um tile preenchido com cor escurecida - (mantido para compatibilidade)
 func _draw_iso_tile_filled(pos: Vector2, color: Color) -> void:
+	# This now draws the same base texture; overlays could be added later.
+	_draw_iso_tile_textured(pos, TextureManager.get_floor_texture())
+
+# Desenha um tile usando uma textura que cobre o tile inteiro
+func _draw_iso_tile_textured(pos: Vector2, texture: Texture2D) -> void:
+	var top_left = pos - Vector2(TILE_WIDTH_HALF, TILE_HEIGHT_HALF)
+	var rect = Rect2(top_left, Vector2(TILE_WIDTH, TILE_HEIGHT))
+	draw_texture_rect(texture, rect, false)
+	# Mantém borda para legibilidade
 	var points = PackedVector2Array([
 		pos + Vector2(0, -TILE_HEIGHT_HALF),
 		pos + Vector2(TILE_WIDTH_HALF, 0),
 		pos + Vector2(0, TILE_HEIGHT_HALF),
 		pos + Vector2(-TILE_WIDTH_HALF, 0)
 	])
-	draw_polygon(points, PackedColorArray([color.darkened(0.2)]))
+	draw_polyline(points, Color.BLACK, 1.0)
 
 # Desenha o player - Otimizado (remove polylines desnecessárias)
 func _draw_player_sprite(pos: Vector2, color: Color) -> void:

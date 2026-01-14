@@ -148,6 +148,11 @@ const COLOR_WALL := Color(0.6, 0.6, 0.6, 1)
 const COLOR_PLAYER := Color(0.2, 0.6, 1.0, 1)
 ```
 
+### Texturas de Piso
+Floor textures are loaded from `res://assets/floor/` using `scripts/map/texture_manager.gd`.
+- Place textures in that folder (e.g. `floor_default.png`).
+- The game currently uses the first texture for all tiles; `TextureManager` is ready for weighted selection in the future.
+
 ### Adicionar novos elementos visuais
 Crie novo método em `MapRenderer`:
 ```gdscript
