@@ -116,22 +116,18 @@ As configurações são salvas em `user://settings.cfg`:
 - [x] Sistema de batalha estilo Undertale
 - [x] UI de batalha completa
 - [x] Interação com inimigos
+- [x] Música e efeitos sonoros
 
 ### 🚧 Em Desenvolvimento
-- [ ] Separação de scripts em módulos
 - [ ] Sistema de recursos para mapas
-- [ ] Botões ACT e ITEM funcionais
 - [ ] Diferentes tipos de inimigos
-- [ ] Sistema de inventário
-- [ ] Sistema de XP e Level Up
+- [ ] Sprites personalizados
 
 ### 🔮 Futuro
 - [ ] Mais mapas
 - [ ] Sistema de quests
 - [ ] NPCs e diálogos
 - [ ] Sistema de save/load
-- [ ] Música e efeitos sonoros
-- [ ] Sprites personalizados
 
 ## 🛠️ Tecnologias
 - **Engine**: Godot 4.5
