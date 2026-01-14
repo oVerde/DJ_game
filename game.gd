@@ -104,6 +104,24 @@ var player_sprites: Dictionary = {
 		preload("res://assets/charachter/back1.png"),
 		preload("res://assets/charachter/back2.png"),
 	],
+	# Diagonal down (towards camera)
+	"down_right": [
+		preload("res://assets/charachter/right_diagonal1.png"),
+		preload("res://assets/charachter/right_diagonal2.png"),
+	],
+	"down_left": [
+		preload("res://assets/charachter/left_diagonal1.png"),
+		preload("res://assets/charachter/left_diagonal2.png"),
+	],
+	# Diagonal up (away from camera)
+	"up_right": [
+		preload("res://assets/charachter/right_diagonal_up1.png"),
+		preload("res://assets/charachter/right_diagonal_up2.png"),
+	],
+	"up_left": [
+		preload("res://assets/charachter/left_diagonal_up1.png"),
+		preload("res://assets/charachter/left_diagonal_up2.png"),
+	],
 }
 var player_direction: String = "right" # default when game starts
 var player_anim_frame: int = 0 # 0 or 1 -> index in sprite arrays
@@ -418,10 +436,20 @@ func _handle_exploration(delta: float) -> void:
 				player_grid_pos = next_pos_y
 
 func _update_player_animation(input_dir: Vector2, delta: float) -> void:
-	# Determine facing direction based on input
-	if abs(input_dir.x) > abs(input_dir.y):
+	# Determine facing direction based on input (including diagonals)
+	var abs_x: float = abs(input_dir.x)
+	var abs_y: float = abs(input_dir.y)
+	if abs_x > 0.0 and abs_y > 0.0:
+		# Diagonal movement
+		if input_dir.y > 0.0:
+			# Moving down (towards camera)
+			player_direction = "down_right" if input_dir.x > 0.0 else "down_left"
+		else:
+			# Moving up (away from camera)
+			player_direction = "up_right" if input_dir.x > 0.0 else "up_left"
+	elif abs_x > abs_y:
 		player_direction = "right" if input_dir.x > 0.0 else "left"
-	elif abs(input_dir.y) > 0.0:
+	elif abs_y > 0.0:
 		# In this project "back" is up and "down" is towards the screen
 		player_direction = "down" if input_dir.y > 0.0 else "back"
 
@@ -667,11 +695,9 @@ func _check_battle_end():
 	_show_battle_options()
 
 func _reset_game():
-	player_hp = player_max_hp
-	current_state = GameState.EXPLORATION
-	battle_ui.visible = false
-	_load_map(0)
-	print("O jogador morreu. Jogo reiniciado.")
+	# Quando o jogador perde toda a vida, o jogo é encerrado.
+	print("O jogador morreu. Fechando o jogo...")
+	get_tree().quit()
 
 
 func _create_battle_ui() -> Control:
@@ -1073,7 +1099,17 @@ func _draw() -> void:
 		if item.type == "wall":
 			_draw_iso_tile_textured(screen_pos, TextureManager.get_floor_texture_for_position(item.pos))
 		elif item.type == "door":
+			# Tile base
 			_draw_iso_tile_textured(screen_pos, TextureManager.get_floor_texture_for_position(item.pos))
+			# Full isometric marker matching the grid tile (black diamond)
+			var marker_points := PackedVector2Array([
+				screen_pos + Vector2(0, -TILE_HEIGHT_HALF),
+				screen_pos + Vector2(TILE_WIDTH_HALF, 0),
+				screen_pos + Vector2(0, TILE_HEIGHT_HALF),
+				screen_pos + Vector2(-TILE_WIDTH_HALF, 0)
+			])
+			var marker_colors := PackedColorArray([Color.BLACK, Color.BLACK, Color.BLACK, Color.BLACK])
+			draw_polygon(marker_points, marker_colors)
 		elif item.type == "enemy":
 			_draw_enemy(screen_pos, item.data)
 		elif item.type == "npc":
@@ -1120,14 +1156,7 @@ func _draw_iso_tile_textured(pos: Vector2, texture: Texture2D) -> void:
 	var top_left = pos - Vector2(TILE_WIDTH_HALF, TILE_HEIGHT_HALF)
 	var rect = Rect2(top_left, Vector2(TILE_WIDTH, TILE_HEIGHT))
 	draw_texture_rect(texture, rect, false)
-	# Keep an outline for legibility
-	var points = PackedVector2Array([
-		pos + Vector2(0, -TILE_HEIGHT_HALF),
-		pos + Vector2(TILE_WIDTH_HALF, 0),
-		pos + Vector2(0, TILE_HEIGHT_HALF),
-		pos + Vector2(-TILE_WIDTH_HALF, 0)
-	])
-	draw_polyline(points, Color.BLACK, 1.0)
+	# Outline removed to avoid visible grid lines between tiles
 
 
 func _draw_player_sprite(pos: Vector2, color: Color) -> void:
