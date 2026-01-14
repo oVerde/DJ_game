@@ -1,0 +1,6 @@
+test,whereX,whereY,datetime,type,typeof,payload
+1,2,5,2026-01-14T16:19:14,event,location_entered,"{""room_ID"":0}"
+1,13,6,2026-01-14T16:19:23,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(14.0, 5.0)""}"
+1,2,5,2026-01-14T16:19:23,event,location_entered,"{""room_ID"":1}"
+1,18,5,2026-01-14T16:19:26,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(19.0, 5.0)""}"
+1,2,6,2026-01-14T16:19:26,event,location_entered,"{""room_ID"":2}"

@@ -10,10 +10,14 @@ const PLAYER_HEIGHT = 40.0
 const PLAYER_WIDTH = 20.0
 const PLAYER_HEAD_RADIUS = 8.0
 const PLAYER_SPEED = 200.0
+const BACKGROUND_OFFSET := Vector2(0.0, -200.0)
+
+const WALK_ANIM_SPEED := 0.15
 
 enum GameState { EXPLORATION, BATTLE }
 
 var current_state = GameState.EXPLORATION
+var background_texture: Texture2D = preload("res://assets/BG/BG.png")
 var player_grid_pos: Vector2 = Vector2.ZERO
 var last_camera_pos: Vector2 = Vector2.ZERO
 var current_map: int = 0
@@ -76,6 +80,30 @@ var player_attack: int = 10
 # Audio tracking
 var walk_sound_playing: bool = false
 var walk_audio_player: AudioStreamPlayer
+
+
+# Player sprite/animation
+var player_sprites: Dictionary = {
+	"right": [
+		preload("res://assets/charachter/right1.png"),
+		preload("res://assets/charachter/right2.png"),
+	],
+	"left": [
+		preload("res://assets/charachter/left1.png"),
+		preload("res://assets/charachter/left2.png"),
+	],
+	"down": [
+		preload("res://assets/charachter/down1.png"),
+		preload("res://assets/charachter/down2.png"),
+	],
+	"back": [
+		preload("res://assets/charachter/back1.png"),
+		preload("res://assets/charachter/back2.png"),
+	],
+}
+var player_direction: String = "right" # default when game starts
+var player_anim_frame: int = 0 # 0 or 1 -> index in sprite arrays
+var player_walk_time: float = 0.0
 
 var LoggerClass = preload("res://scripts/utils/logger.gd") # DJLogger
 var logger = null
@@ -327,6 +355,8 @@ func _handle_exploration(delta: float) -> void:
 		if walk_sound_playing and walk_audio_player:
 			walk_audio_player.stop()
 			walk_sound_playing = false
+		# Reset walk timer but keep last used sprite
+		player_walk_time = 0.0
 		return
 	
 	# Toca som de caminhada em loop enquanto se move
@@ -335,6 +365,7 @@ func _handle_exploration(delta: float) -> void:
 		walk_sound_playing = true
 	
 	input_dir = input_dir.normalized()
+	_update_player_animation(input_dir, delta)
 	
 	var move_vector = Vector2.ZERO
 	move_vector.x = input_dir.x + input_dir.y
@@ -353,6 +384,20 @@ func _handle_exploration(delta: float) -> void:
 			var next_pos_y = player_grid_pos + Vector2(0, move_step.y)
 			if _is_valid_position(next_pos_y):
 				player_grid_pos = next_pos_y
+
+func _update_player_animation(input_dir: Vector2, delta: float) -> void:
+	# Determine facing direction based on input
+	if abs(input_dir.x) > abs(input_dir.y):
+		player_direction = "right" if input_dir.x > 0.0 else "left"
+	elif abs(input_dir.y) > 0.0:
+		# In this project "back" is up and "down" is towards the screen
+		player_direction = "down" if input_dir.y > 0.0 else "back"
+
+	# Advance walk cycle
+	player_walk_time += delta
+	if player_walk_time >= WALK_ANIM_SPEED:
+		player_walk_time = 0.0
+		player_anim_frame = 1 - player_anim_frame
 
 func _is_valid_position(pos: Vector2) -> bool:
 	var map = maps[current_map]
@@ -944,6 +989,16 @@ func _draw() -> void:
 		return
 	
 	var map = maps[current_map]
+
+	# Desenhar imagem de fundo atrás do mapa e do jogador
+	if background_texture:
+		var map_size: Vector2 = map.size
+		var center_cart := map_size / 2.0
+		var center_iso := cartesian_to_isometric(center_cart)
+		var tex_size: Vector2 = background_texture.get_size()
+		var top_left := center_iso - tex_size / 2.0 + BACKGROUND_OFFSET
+		var bg_rect := Rect2(top_left, tex_size)
+		draw_texture_rect(background_texture, bg_rect, false)
 	var draw_list = []
 	
 	for wall in map.walls:
@@ -1021,10 +1076,22 @@ func _draw_iso_tile_textured(pos: Vector2, texture: Texture2D) -> void:
 	])
 	draw_polyline(points, Color.BLACK, 1.0)
 
+
 func _draw_player_sprite(pos: Vector2, color: Color) -> void:
+	var frames: Array = player_sprites.get(player_direction, [])
+	if frames.size() > 0:
+		var clamped_index: int = clamp(player_anim_frame, 0, frames.size() - 1)
+		var tex: Texture2D = frames[clamped_index] as Texture2D
+		if tex:
+			var tex_size: Vector2 = tex.get_size()
+			# Align feet of the sprite with the tile center
+			var top_left: Vector2 = pos - Vector2(tex_size.x / 2.0, tex_size.y)
+			draw_texture(tex, top_left)
+			return
+
+	# Fallback: old debug shape if something goes wrong with textures
 	var head_pos = pos + Vector2(0, -(PLAYER_HEIGHT + PLAYER_HEAD_RADIUS))
 	draw_circle(head_pos, PLAYER_HEAD_RADIUS, color)
-	
 	var body_points = PackedVector2Array([
 		pos + Vector2(-PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),
 		pos + Vector2(PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),

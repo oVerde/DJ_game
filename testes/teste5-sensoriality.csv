@@ -1,0 +1,4 @@
+test,whereX,whereY,datetime,type,typeof,payload
+5,2,5,2026-01-14T16:24:33,event,location_entered,"{""room_ID"":0}"
+5,13,6,2026-01-14T16:24:35,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(14.0, 5.0)""}"
+5,2,5,2026-01-14T16:24:35,event,location_entered,"{""room_ID"":1}"

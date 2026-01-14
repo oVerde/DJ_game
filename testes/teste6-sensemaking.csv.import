@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://deh6o1hwcx2u4"
+
+[deps]
+
+files=["res://testes/teste6-sensemaking.whereX.translation", "res://testes/teste6-sensemaking.whereY.translation", "res://testes/teste6-sensemaking.datetime.translation", "res://testes/teste6-sensemaking.type.translation", "res://testes/teste6-sensemaking.typeof.translation", "res://testes/teste6-sensemaking.payload.translation"]
+
+source_file="res://testes/teste6-sensemaking.csv"
+dest_files=["res://testes/teste6-sensemaking.whereX.translation", "res://testes/teste6-sensemaking.whereY.translation", "res://testes/teste6-sensemaking.datetime.translation", "res://testes/teste6-sensemaking.type.translation", "res://testes/teste6-sensemaking.typeof.translation", "res://testes/teste6-sensemaking.payload.translation"]
+
+[params]
+
+compress=true
+delimiter=0
