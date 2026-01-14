@@ -11,14 +11,8 @@ Jogo RPG com perspectiva isométrica estilo Hades e sistema de batalha inspirado
 - **QUIT**: Fecha o jogo
 
 ### Exploração
-- **W, A, S, D**: Movimento em perspectiva isométrica
-- **E**: Interagir com portas e inimigos
-
-### Batalha
-- **FIGHT**: Atacar o inimigo
-- **ACT**: (Em desenvolvimento)
-- **ITEM**: (Em desenvolvimento)
-- **MERCY**: Fugir da batalha
+- **W, A, S, D ou Joysticl**: Movimento em perspectiva isométrica
+- **E ou A(Xbox)**: Interagir com portas e inimigos
 
 ## 📁 Estrutura do Projeto
 
