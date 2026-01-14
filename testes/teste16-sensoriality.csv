@@ -1,6 +1,0 @@
-test,whereX,whereY,datetime,type,typeof,payload
-16,2,5,2026-01-13T02:14:07,event,location_entered,"{""room_ID"":0}"
-16,13,4,2026-01-13T02:14:10,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(14.0, 5.0)""}"
-16,2,5,2026-01-13T02:14:10,event,location_entered,"{""room_ID"":1}"
-16,0,5,2026-01-13T02:14:12,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(0.0, 5.0)""}"
-16,2,5,2026-01-13T02:14:12,event,location_entered,"{""room_ID"":0}"

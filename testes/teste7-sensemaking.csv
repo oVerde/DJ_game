@@ -1,6 +1,0 @@
-test,whereX,whereY,datetime,type,typeof,payload
-7,1,10,2026-01-13T01:54:57,event,option_displayed,"{""dialog_id"":0}"
-7,1,10,2026-01-13T01:54:59,action,option_selected,"{""dialog_id"":0,""narrative_alignment_tag"":""good"",""option_number"":0}"
-7,1,10,2026-01-13T01:54:59,state,heath_changed,"{""old_health_value"":100,""option_number"":0,""who"":""player""}"
-7,1,10,2026-01-13T01:54:59,state,heath_changed,"{""old_health_value"":30,""option_number"":0,""who"":""enemy""}"
-7,1,10,2026-01-13T01:55:01,event,option_displayed,"{""dialog_id"":1}"

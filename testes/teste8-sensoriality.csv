@@ -1,9 +1,0 @@
-test,whereX,whereY,datetime,type,typeof,payload
-8,2,5,2026-01-13T01:56:39,event,location_entered,"{""room_ID"":0}"
-8,13,4,2026-01-13T01:56:47,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(14.0, 5.0)""}"
-8,2,5,2026-01-13T01:56:47,event,location_entered,"{""room_ID"":1}"
-8,9,4,2026-01-13T01:56:50,action,object_touched,"{""is_key_item"":false,""object_ID"":""Guard""}"
-8,9,4,2026-01-13T01:56:51,action,object_touched,"{""is_key_item"":false,""object_ID"":""Guard""}"
-8,19,4,2026-01-13T01:56:53,action,object_touched,"{""is_key_item"":true,""object_ID"":""door_(19.0, 5.0)""}"
-8,2,6,2026-01-13T01:56:53,event,location_entered,"{""room_ID"":2}"
-8,2,10,2026-01-13T01:56:54,action,object_touched,"{""is_key_item"":true,""object_ID"":""Espelho""}"
