@@ -35,6 +35,9 @@ var game_settings = {
 	"controls_invert_y": false
 }
 
+# Índice de navegação atual no menu principal (para teclado/controle)
+var current_menu_index: int = 0
+
 func _ready() -> void:
 	print("Iniciando Menu...")
 	
@@ -89,6 +92,77 @@ func _process(_delta: float) -> void:
 	# Loop do vídeo manual (garantia)
 	if video_player and not video_player.is_playing():
 		video_player.play()
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Navegação por teclado/controle tanto no menu principal quanto nas settings
+	if not is_instance_valid(control_root):
+		return
+
+	if not is_in_settings:
+		_handle_main_menu_input(event)
+	else:
+		_handle_settings_input(event)
+
+func _handle_main_menu_input(event: InputEvent) -> void:
+	if buttons.is_empty():
+		return
+
+	# Navegação vertical: usa as mesmas ações de movimento do jogo
+	if event.is_action_pressed("move_up"):
+		_move_menu_focus(-1)
+		var vp := get_viewport()
+		if vp:
+			vp.set_input_as_handled()
+	elif event.is_action_pressed("move_down"):
+		_move_menu_focus(1)
+		var vp2 := get_viewport()
+		if vp2:
+			vp2.set_input_as_handled()
+	# Selecionar opção focada com a ação de interação (E / Botão A)
+	elif event.is_action_pressed("interact"):
+		var focused_btn := _get_focused_menu_button()
+		if focused_btn:
+			focused_btn.emit_signal("pressed")
+			var vp3 := get_viewport()
+			if vp3:
+				vp3.set_input_as_handled()
+	# Sair rapidamente com BACK / Botão B
+	elif event.is_action_pressed("back"):
+		_on_button_pressed("quit")
+		var vp4 := get_viewport()
+		if vp4:
+			vp4.set_input_as_handled()
+
+func _handle_settings_input(event: InputEvent) -> void:
+	# Permitir voltar das configurações com ESC / Botão B
+	if event.is_action_pressed("back"):
+		_on_settings_back()
+		var vp := get_viewport()
+		if vp:
+			vp.set_input_as_handled()
+
+func _move_menu_focus(direction: int) -> void:
+	var valid_buttons: Array[Button] = []
+	for b in buttons:
+		if is_instance_valid(b) and b.visible:
+			valid_buttons.append(b)
+	if valid_buttons.is_empty():
+		return
+
+	var focused_btn := _get_focused_menu_button()
+	if focused_btn:
+		current_menu_index = valid_buttons.find(focused_btn)
+		if current_menu_index == -1:
+			current_menu_index = 0
+
+	current_menu_index = wrapi(current_menu_index + direction, 0, valid_buttons.size())
+	valid_buttons[current_menu_index].grab_focus()
+
+func _get_focused_menu_button() -> Button:
+	var owner := get_viewport().gui_get_focus_owner()
+	if owner is Button and buttons.has(owner):
+		return owner
+	return null
 
 func _setup_video_background() -> void:
 	# Fundo base (Cinza escuro para debug - se ver isso, o vídeo falhou)

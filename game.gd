@@ -90,6 +90,12 @@ var last_input_gamepad: bool = false
 var continue_hint: Label = null
 var current_interaction_action: String = ""
 
+var ui_canvas: CanvasLayer
+var pause_menu: Panel
+var is_paused: bool = false
+var pause_buttons: Array[Button] = []
+var pause_selected_index: int = 0
+
 var conversation_menu_active: bool = false
 var conversation_options_container: Control = null
 var battle_dialogue_rounds = [
@@ -113,6 +119,8 @@ var battle_dialogue_rounds = [
 	]
 ]
 var current_battle_round = 0
+var battle_selected_option_index = 0
+var battle_option_buttons = []
 
 func _ready() -> void:
 	camera = Camera2D.new()
@@ -121,6 +129,7 @@ func _ready() -> void:
 	
 	var canvas = CanvasLayer.new()
 	add_child(canvas)
+	ui_canvas = canvas
 	
 	interaction_label = Label.new()
 	interaction_label.position = Vector2(20, 20)
@@ -172,6 +181,9 @@ func _ready() -> void:
 	dialogue_box.add_child(continue_hint) 
 	
 	canvas.add_child(dialogue_box)
+
+	# Criar menu de pausa (inicialmente oculto)
+	_create_pause_menu()
 
 	# Criar player de áudio para som de caminhada (loop independente)
 	walk_audio_player = AudioStreamPlayer.new()
@@ -228,6 +240,9 @@ func _load_map(map_index: int) -> void:
 		logger.log_location_entered(current_map, player_grid_pos.floor())
 
 func _process(delta: float) -> void:
+	if is_paused:
+		return
+
 	if current_state == GameState.EXPLORATION:
 		_handle_exploration(delta)
 		queue_redraw()
@@ -241,16 +256,41 @@ func _process(delta: float) -> void:
 	_check_interactions()
 
 func _input(event) -> void:
+	# Toggle do menu de pausa com a ação "escape"
+	if event.is_action_pressed("escape"):
+		_toggle_pause_menu()
+		return
+	
+	# Quando o jogo está pausado, redirecionar inputs para o menu de pausa
+	if is_paused:
+		_handle_pause_input(event)
+		return
+
 	# Detectar último dispositivo de entrada (joystick vs teclado/mouse)
 	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
 		last_input_gamepad = true
 	elif event is InputEventKey or event is InputEventMouseButton:
 		last_input_gamepad = false
-	
+
+	# Battle dialogue navigation
+	if current_state == GameState.BATTLE and conversation_options_container:
+		var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
+		var max_idx = len(options) - 1
+		if event.is_action_pressed("move_up"):
+			battle_selected_option_index = max(0, battle_selected_option_index - 1)
+			_update_battle_option_highlight()
+		elif event.is_action_pressed("move_down"):
+			battle_selected_option_index = min(max_idx, battle_selected_option_index + 1)
+			_update_battle_option_highlight()
+		elif event.is_action_pressed("interact"):
+			battle_option_buttons[battle_selected_option_index].emit_signal("pressed")
+		elif event.is_action_pressed("ui_cancel") or event.is_action_pressed("back"):
+			_on_flee_pressed()
+
 	# Atualizar texto do continue_hint se visível
 	if continue_hint and dialogue_box and dialogue_box.visible:
 		continue_hint.text = "[Pressione " + _interact_hint_plain() + " para continuar]"
-	
+
 	# Atualizar texto de interação se visível
 	if interaction_label and interaction_label.visible and current_interaction_action != "":
 		_update_interaction_label_text(current_interaction_action)
@@ -440,6 +480,7 @@ func _start_battle(enemy: Dictionary) -> void:
 	battle_ui.visible = true
 	print("Batalha iniciada contra ", enemy.name)
 	current_battle_round = 0
+	battle_selected_option_index = 0
 	_show_battle_options()
 
 func _show_battle_options():
@@ -452,24 +493,34 @@ func _show_battle_options():
 	conversation_options_container.anchor_right = 0.98
 	conversation_options_container.anchor_bottom = 0.98
 	var options = battle_dialogue_rounds[min(current_battle_round, battle_dialogue_rounds.size() - 1)]
+	battle_option_buttons = []
 	for i in range(len(options)):
 		var option = options[i]
 		var btn = Button.new()
 		btn.text = option.text
-		# Sons de menu na batalha
 		btn.mouse_entered.connect(func(): AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0))
 		btn.focus_entered.connect(func(): AudioManager.play_sfx("res://multimedia/sfx/menu_select.wav", -8.0))
-		# captura o índice para sabermos qual opção foi escolhida
 		btn.pressed.connect(func(opt_idx=i, opt_val=option): 
 			AudioManager.play_sfx("res://multimedia/sfx/menu_confirm.wav", -6.0)
 			_on_battle_option_selected(opt_val, opt_idx)
 		)
 		conversation_options_container.add_child(btn)
-
+		battle_option_buttons.append(btn)
+	battle_selected_option_index = 0
+	_update_battle_option_highlight()
 	# Log: opções exibidas
 	if logger:
 		logger.log_event("option_displayed", {"dialog_id": current_battle_round}, player_grid_pos.floor())
 	battle_ui.add_child(conversation_options_container)
+func _update_battle_option_highlight():
+	for i in range(len(battle_option_buttons)):
+		var btn = battle_option_buttons[i]
+		if i == battle_selected_option_index:
+			btn.grab_focus()
+		btn.add_theme_color_override("font_color", Color.WHITE)
+
+func _battle_select_hint_plain() -> String:
+	return "A" if last_input_gamepad else "E"
 
 func _on_battle_option_selected(option: Dictionary, option_index: int = -1):
 	# Se veio de um dano recente, isto pode ser considerado uma reação
@@ -860,7 +911,7 @@ func _on_attack_pressed() -> void:
 func _on_flee_pressed() -> void:
 	var dialogue_text = battle_ui.find_child("DialogueText", true, false)
 	if dialogue_text:
-		dialogue_text.text = "* You escaped!"
+		dialogue_text.text = "* Você fugiu!"
 	await get_tree().create_timer(1.5).timeout
 	_end_battle(false)
 
@@ -985,3 +1036,119 @@ func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 func _draw_enemy(pos: Vector2, _enemy: Dictionary) -> void:
 	var enemy_pos = pos + Vector2(0, -20)
 	draw_circle(enemy_pos, 15, Color.RED)
+
+func _create_pause_menu() -> void:
+	if not ui_canvas:
+		return
+
+	pause_menu = Panel.new()
+	pause_menu.visible = false
+	pause_menu.set_anchors_preset(Control.PRESET_CENTER)
+	pause_menu.offset_left = -200
+	pause_menu.offset_right = 200
+	pause_menu.offset_top = -120
+	pause_menu.offset_bottom = 120
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.95)
+	style.border_color = Color(1, 1, 1, 0.8)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	pause_menu.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 20
+	vbox.offset_right = -20
+	vbox.offset_top = 20
+	vbox.offset_bottom = -20
+	vbox.add_theme_constant_override("separation", 16)
+	pause_menu.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Pausa"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(title)
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	vbox.add_child(spacer)
+
+	var resume_btn := Button.new()
+	resume_btn.text = "Continuar"
+	resume_btn.add_theme_font_size_override("font_size", 20)
+	resume_btn.pressed.connect(_on_pause_resume_pressed)
+	vbox.add_child(resume_btn)
+
+	var main_menu_btn := Button.new()
+	main_menu_btn.text = "Menu Principal"
+	main_menu_btn.add_theme_font_size_override("font_size", 20)
+	main_menu_btn.pressed.connect(_on_pause_main_menu_pressed)
+	vbox.add_child(main_menu_btn)
+
+	pause_buttons.clear()
+	pause_buttons.append(resume_btn)
+	pause_buttons.append(main_menu_btn)
+
+	ui_canvas.add_child(pause_menu)
+
+func _toggle_pause_menu() -> void:
+	is_paused = not is_paused
+	if pause_menu:
+		pause_menu.visible = is_paused
+		if is_paused:
+			pause_selected_index = 0
+			if pause_buttons.size() > 0 and is_instance_valid(pause_buttons[0]):
+				pause_buttons[0].grab_focus()
+
+func _focus_pause_button() -> void:
+	if pause_buttons.is_empty():
+		return
+	pause_selected_index = clamp(pause_selected_index, 0, pause_buttons.size() - 1)
+	var btn := pause_buttons[pause_selected_index]
+	if is_instance_valid(btn):
+		btn.grab_focus()
+
+func _handle_pause_input(event) -> void:
+	if not pause_menu or not pause_menu.visible:
+		return
+	if pause_buttons.is_empty():
+		return
+
+	if event.is_action_pressed("move_up"):
+		pause_selected_index = wrapi(pause_selected_index - 1, 0, pause_buttons.size())
+		_focus_pause_button()
+	elif event.is_action_pressed("move_down"):
+		pause_selected_index = wrapi(pause_selected_index + 1, 0, pause_buttons.size())
+		_focus_pause_button()
+	elif event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
+		# Priorizar o botão que realmente está com foco (para coincidir com o visual)
+		var vp := get_viewport()
+		if vp:
+			var owner := vp.gui_get_focus_owner()
+			if owner is Button and pause_buttons.has(owner):
+				(owner as Button).emit_signal("pressed")
+				return
+		# Fallback para o índice selecionado manualmente
+		var btn := pause_buttons[pause_selected_index]
+		if is_instance_valid(btn):
+			btn.emit_signal("pressed")
+	elif event.is_action_pressed("back"):
+		_toggle_pause_menu()
+
+func _on_pause_resume_pressed() -> void:
+	is_paused = false
+	if pause_menu:
+		pause_menu.visible = false
+
+func _on_pause_main_menu_pressed() -> void:
+	# Volta ao menu principal
+	is_paused = false
+	if pause_menu:
+		pause_menu.visible = false
+	# Garantir que a música correta esteja tocando no menu
+	AudioManager.stop_music()
+	AudioManager.play_music("res://multimedia/music/main_theme.mp3", 0.0, true)
+	get_tree().change_scene_to_file("res://test_scene.tscn")
