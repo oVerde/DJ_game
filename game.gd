@@ -12,6 +12,10 @@ const PLAYER_HEAD_RADIUS = 8.0
 const PLAYER_SPEED = 200.0
 const BACKGROUND_OFFSET := Vector2(0.0, -200.0)
 
+const PLAYER_SPRITE_SCALE := 1.5
+const NPC_SPRITE_SCALE := 1.5
+const ENEMY_SPRITE_SCALE := 2.3
+
 const WALK_ANIM_SPEED := 0.15
 
 enum GameState { EXPLORATION, BATTLE }
@@ -105,6 +109,27 @@ var player_direction: String = "right" # default when game starts
 var player_anim_frame: int = 0 # 0 or 1 -> index in sprite arrays
 var player_walk_time: float = 0.0
 
+# NPC sprite/animation (idle two-frame loop)
+const NPC_ANIM_SPEED := 0.4
+var npc_sprites: Array = [
+	preload("res://assets/npc/npc1.png"),
+	preload("res://assets/npc/npc2.png"),
+]
+var npc_anim_frame: int = 0
+var npc_anim_time: float = 0.0
+
+# Enemy/object sprites (Sala do Chefe - mapa 3)
+var enemy_sprites: Dictionary = {
+	"Espelho": preload("res://assets/objets/espelho.png"),
+	"Livro": preload("res://assets/objets/livros.png"),
+	"Casaco": preload("res://assets/objets/casaco.png"),
+	"Cadeira": preload("res://assets/objets/cadeira.png"),
+	"Abajur": preload("res://assets/objets/abajur.png"),
+	"Quadro": preload("res://assets/objets/pintura.png"),
+	"Relógio": preload("res://assets/objets/relogio.png"),
+	"Almofada": preload("res://assets/objets/almofada.png"),
+}
+
 var LoggerClass = preload("res://scripts/utils/logger.gd") # DJLogger
 var logger = null
 var last_selected_option_index: int = -1
@@ -151,6 +176,9 @@ var battle_selected_option_index = 0
 var battle_option_buttons = []
 
 func _ready() -> void:
+	# Ensure pixel-art textures scale using nearest-neighbor (no blur)
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
 	camera = Camera2D.new()
 	camera.zoom = Vector2(1.5, 1.5)
 	add_child(camera)
@@ -273,7 +301,11 @@ func _process(delta: float) -> void:
 
 	if current_state == GameState.EXPLORATION:
 		_handle_exploration(delta)
+		_update_npc_animation(delta)
 		queue_redraw()
+	else:
+		# Mesmo em outros estados, manter animação do NPC atualizada
+		_update_npc_animation(delta)
 	
 	var screen_pos = cartesian_to_isometric(player_grid_pos)
 	var new_camera_pos = last_camera_pos.lerp(screen_pos, 5.0 * delta)
@@ -398,6 +430,16 @@ func _update_player_animation(input_dir: Vector2, delta: float) -> void:
 	if player_walk_time >= WALK_ANIM_SPEED:
 		player_walk_time = 0.0
 		player_anim_frame = 1 - player_anim_frame
+
+func _update_npc_animation(delta: float) -> void:
+	# Animação simples de dois frames para todos os NPCs
+	if npc_sprites.size() < 2:
+		return
+
+	npc_anim_time += delta
+	if npc_anim_time >= NPC_ANIM_SPEED:
+		npc_anim_time = 0.0
+		npc_anim_frame = 1 - npc_anim_frame
 
 func _is_valid_position(pos: Vector2) -> bool:
 	var map = maps[current_map]
@@ -1040,10 +1082,21 @@ func _draw() -> void:
 			_draw_player_sprite(screen_pos, Color.CYAN)
 
 func _draw_npc(pos: Vector2, _obj: Dictionary) -> void:
-	# Desenhar NPC igual ao player, mas em verde
+	# Desenhar NPC usando sprites dedicados, alinhando os pés ao centro do tile
+	if npc_sprites.size() > 0:
+		var clamped_index: int = clamp(npc_anim_frame, 0, npc_sprites.size() - 1)
+		var tex: Texture2D = npc_sprites[clamped_index] as Texture2D
+		if tex:
+			var tex_size: Vector2 = tex.get_size()
+			var scaled_size: Vector2 = tex_size * NPC_SPRITE_SCALE
+			var top_left: Vector2 = pos - Vector2(scaled_size.x / 2.0, scaled_size.y)
+			var rect := Rect2(top_left, scaled_size)
+			draw_texture_rect(tex, rect, false)
+			return
+
+	# Fallback: forma simples caso as texturas não estejam disponíveis
 	var head_pos = pos + Vector2(0, -(PLAYER_HEIGHT + PLAYER_HEAD_RADIUS))
 	draw_circle(head_pos, PLAYER_HEAD_RADIUS, Color(0, 1, 0))
-
 	var body_points = PackedVector2Array([
 		pos + Vector2(-PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),
 		pos + Vector2(PLAYER_WIDTH / 2.0, -PLAYER_HEIGHT),
@@ -1084,9 +1137,11 @@ func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 		var tex: Texture2D = frames[clamped_index] as Texture2D
 		if tex:
 			var tex_size: Vector2 = tex.get_size()
-			# Align feet of the sprite with the tile center
-			var top_left: Vector2 = pos - Vector2(tex_size.x / 2.0, tex_size.y)
-			draw_texture(tex, top_left)
+			var scaled_size: Vector2 = tex_size * PLAYER_SPRITE_SCALE
+			# Align feet of the sprite with the tile center, using scaled size
+			var top_left: Vector2 = pos - Vector2(scaled_size.x / 2.0, scaled_size.y)
+			var rect := Rect2(top_left, scaled_size)
+			draw_texture_rect(tex, rect, false)
 			return
 
 	# Fallback: old debug shape if something goes wrong with textures
@@ -1100,7 +1155,21 @@ func _draw_player_sprite(pos: Vector2, color: Color) -> void:
 	])
 	draw_polygon(body_points, PackedColorArray([color.darkened(0.3)]))
 
-func _draw_enemy(pos: Vector2, _enemy: Dictionary) -> void:
+func _draw_enemy(pos: Vector2, enemy: Dictionary) -> void:
+	# Desenhar inimigos/objetos da Sala do Chefe usando sprites dedicados
+	var enemy_name: String = enemy.get("name", "")
+	if enemy_sprites.has(enemy_name):
+		var tex: Texture2D = enemy_sprites[enemy_name]
+		if tex:
+			var tex_size: Vector2 = tex.get_size()
+			var scaled_size: Vector2 = tex_size * ENEMY_SPRITE_SCALE
+			# Alinha a base do sprite ao centro do tile
+			var top_left: Vector2 = pos - Vector2(scaled_size.x / 2.0, scaled_size.y)
+			var rect := Rect2(top_left, scaled_size)
+			draw_texture_rect(tex, rect, false)
+			return
+
+	# Fallback visual simples caso não haja sprite configurado
 	var enemy_pos = pos + Vector2(0, -20)
 	draw_circle(enemy_pos, 15, Color.RED)
 
