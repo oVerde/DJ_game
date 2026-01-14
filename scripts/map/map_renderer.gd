@@ -18,29 +18,39 @@ var camera_offset: Vector2 = Vector2.ZERO
 
 func _init(p_canvas: CanvasItem):
 	canvas = p_canvas
+	# Initialize texture manager so floor textures are ready to use
+	# Textures are loaded from `res://assets/floor/` via TextureManager
+	TextureManager.init()
 
 ## Define o offset da câmera
 func set_camera_offset(offset: Vector2):
 	camera_offset = offset
 
-## Desenha o chão do mapa
+## Desenha o chão do mapa (usando texturas de piso)
 func draw_floor(map_size: Vector2):
 	for x in range(map_size.x):
 		for y in range(map_size.y):
-			var iso_pos := IsometricUtils.cartesian_to_isometric(Vector2(x, y)) + camera_offset
-			_draw_tile(iso_pos, COLOR_FLOOR)
+			var grid_pos := Vector2(x, y)
+			var tex := TextureManager.get_floor_texture_for_position(grid_pos)
+			var iso_pos := IsometricUtils.cartesian_to_isometric(grid_pos) + camera_offset
+			_draw_tile_textured(iso_pos, tex)
 
-## Desenha as paredes do mapa
+## Desenha as paredes do mapa (atualmente usa a mesma textura de piso)
 func draw_walls(walls: Array):
 	for wall in walls:
-		var iso_pos := IsometricUtils.cartesian_to_isometric(wall) + camera_offset
-		_draw_tile(iso_pos, COLOR_WALL)
+		var grid_pos: Vector2 = wall
+		var tex := TextureManager.get_floor_texture_for_position(grid_pos)
+		var iso_pos := IsometricUtils.cartesian_to_isometric(grid_pos) + camera_offset
+		_draw_tile_textured(iso_pos, tex)
 
-## Desenha as portas do mapa
+## Desenha as portas do mapa (atualmente usa a mesma textura de piso)
 func draw_doors(doors: Array):
 	for door in doors:
-		var iso_pos := IsometricUtils.cartesian_to_isometric(door["pos"]) + camera_offset
-		_draw_tile(iso_pos, COLOR_DOOR)
+		var grid_pos: Vector2 = door["pos"]
+		var tex := TextureManager.get_floor_texture_for_position(grid_pos)
+		var iso_pos := IsometricUtils.cartesian_to_isometric(grid_pos) + camera_offset
+		_draw_tile_textured(iso_pos, tex)
+
 
 ## Desenha os inimigos no mapa
 func draw_enemies(enemies: Array):
@@ -68,16 +78,23 @@ func draw_interact_hint(position: Vector2, text: String = "[E] Interagir"):
 	canvas.draw_string(ThemeDB.fallback_font, iso_pos + Vector2(-50, 5), text, 
 					   HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLOR_INTERACT_HINT)
 
-## Desenha um tile isométrico (losango)
+## Desenha um tile isométrico (losango) - (mantido para compatibilidade)
 func _draw_tile(iso_pos: Vector2, color: Color):
-	var points := PackedVector2Array([
-		iso_pos + Vector2(0, -IsometricUtils.TILE_HEIGHT_HALF),  # Topo
-		iso_pos + Vector2(IsometricUtils.TILE_WIDTH_HALF, 0),    # Direita
-		iso_pos + Vector2(0, IsometricUtils.TILE_HEIGHT_HALF),   # Baixo
-		iso_pos + Vector2(-IsometricUtils.TILE_WIDTH_HALF, 0)    # Esquerda
-	])
-	canvas.draw_colored_polygon(points, color)
-	canvas.draw_polyline(points + [points[0]], Color.BLACK, 1.0)
+	# Deprecated for base tile visuals; tiles now use textures.
+	# This function is kept for compatibility if any external code still passes colors.
+	# It will draw a textured tile instead, preserving the old outline.
+	var tex := TextureManager.get_floor_texture()
+	_draw_tile_textured(iso_pos, tex)
+
+## Desenha um tile usando uma textura que cobre o tile inteiro
+func _draw_tile_textured(iso_pos: Vector2, texture: Texture2D):
+	# iso_pos is the center of the diamond tile; compute top-left of the tile rect
+	var top_left := iso_pos - Vector2(IsometricUtils.TILE_WIDTH_HALF, IsometricUtils.TILE_HEIGHT_HALF)
+	var rect := Rect2(top_left, Vector2(IsometricUtils.TILE_WIDTH, IsometricUtils.TILE_HEIGHT))
+	# Draw texture filling the tile rect
+	canvas.draw_texture_rect(texture, rect, false)
+
+
 
 ## Desenha uma entidade (jogador ou inimigo)
 func _draw_entity(iso_pos: Vector2, color: Color):
